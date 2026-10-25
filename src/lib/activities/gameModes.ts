@@ -12,6 +12,7 @@
 import { normalizeAnswer } from '@/lib/exerciseGrading';
 import { splitLabelAtBlank, type Payload, type Slot } from '@/lib/exercisePayload';
 import { isDropGap } from '@/lib/quizQuestionType';
+import { deriveClozeGameSentences } from './clozeSentences';
 import type { QuizTemplate } from './blocks';
 
 /**
@@ -72,14 +73,20 @@ export const SELF_CHECKING_GAME_MODES: ReadonlySet<GameMode> = new Set([
 /** `cards` is worth flipping through from a single item. */
 const MIN_CARDS_ITEMS = 1;
 
-/** `match` needs at least this many pairs — fewer makes the last pair a guaranteed, un-losable match. */
-const MIN_MATCH_ITEMS = 3;
+/**
+ * `match` needs at least this many pairs — fewer makes the last pair a
+ * guaranteed, un-losable match. Also `MatchPairsEditor.tsx`'s own
+ * "more challenging" tip threshold (exported): the SAME bar for "worth
+ * offering as an alternative to Básico" and for "comfortably challenging to
+ * play" happens to coincide, so there is only the one constant.
+ */
+export const MIN_MATCH_ITEMS = 3;
 
 /** `reorder` needs at least one sentence worth reordering. */
 const MIN_REORDER_ITEMS = 1;
 
-/** A sentence must have at least this many words to be worth reordering — a single word has nothing to reorder. */
-const MIN_REORDER_WORDS = 2;
+/** A sentence must have at least this many words to be worth reordering — a single word has nothing to reorder. Exported: `ReorderEditor.tsx`'s own hint/tip copy reuses this exact bar rather than re-stating "2" as a magic number. */
+export const MIN_REORDER_WORDS = 2;
 
 /** `speak` (Cartas) is worth dealing from a single item, same as `cards`. */
 const MIN_SPEAK_ITEMS = 1;
@@ -100,11 +107,11 @@ const MIN_OPENBOX_ITEMS = 2;
 /** `cloze` needs at least one drag-and-drop gap to fill in. */
 const MIN_CLOZE_ITEMS = 1;
 
-/** `groupsort` needs at least this many groups — one group has nothing to sort against. */
-const MIN_GROUPSORT_GROUPS = 2;
+/** `groupsort` needs at least this many groups — one group has nothing to sort against. Exported: `GroupSortEditor.tsx`'s own tip/footnote copy reuses this bar rather than a duplicate local constant. */
+export const MIN_GROUPSORT_GROUPS = 2;
 
-/** Each group needs at least this many items — a 1-item group is a guaranteed, un-missable match. */
-const MIN_GROUPSORT_ITEMS_PER_GROUP = 2;
+/** Each group needs at least this many items — a 1-item group is a guaranteed, un-missable match. Exported — the single source of truth `groupSort.ts`/`GroupSortEditor.tsx` both used to duplicate locally. */
+export const MIN_GROUPSORT_ITEMS_PER_GROUP = 2;
 
 /** `anagram` tiles stay readable and quick to solve within this letter-count range. */
 const ANAGRAM_MIN_LEN = 3;
@@ -453,20 +460,64 @@ function modesForBlockWithSwitching(modes: readonly GameMode[], template: QuizTe
 }
 
 /**
+ * Does `template`'s own board actually have something to show RIGHT NOW —
+ * the one "has-something-to-show" rule the editor's live preview, the
+ * editor's own template stage, and the practice page all share (polish
+ * batch T1 decision: "molded activity previews show the real board, never
+ * the generic Básico layout"). Each case reads its own template's board at
+ * the SAME granularity that board itself renders at — `match`/`reorder`
+ * read `items` (`deriveGameItems`'s own output, one GameItem per slot);
+ * `cloze`/`groupsort` read `payload` directly, the same raw shape their own
+ * derivation helpers ({@link deriveClozeGameSentences}/{@link
+ * deriveGroupSortGroups}) already take, never collapsed through
+ * `deriveGameItems` (see {@link modesForBlockWithSwitching}'s own header on
+ * why that collapse is lossy for `groupsort` specifically).
+ *
+ * Deliberately NOT the bar {@link availableGameModes} holds a mode to (e.g.
+ * `match`'s own {@link MIN_MATCH_ITEMS} floor of 3 pairs — "is this worth
+ * OFFERING as an alternative to Básico") — a molded block has no Básico to
+ * fall back to in the first place (ONE TEMPLATE, ONE GAME), so it only ever
+ * needs SOMETHING playable, never a minimum worth switching for.
+ */
+export function boardHasContent(template: QuizTemplate, items: readonly GameItem[], payload?: Payload): boolean {
+  switch (template) {
+    case 'match':
+      return items.length > 0 && hasUniqueAnswers(items);
+    case 'reorder':
+      return reorderEligible(items).length > 0;
+    case 'cloze':
+      return payload !== undefined && deriveClozeGameSentences(payload).length > 0;
+    case 'groupsort':
+      return payload !== undefined && deriveGroupSortGroups(payload).length > 0;
+  }
+}
+
+/**
  * Which modes a block actually OFFERS (and so, via `modes.length > 1`,
  * whether `QuizGameModeSwitcher` shows at all — `QuizBlockPractice.tsx`'s
  * own header) — gated by {@link TEMPLATE_GAME_SWITCHING_ENABLED}. `undefined`
- * (Básico) is always `[...modes]` unchanged, both ways.
+ * (Básico) is always `[...modes]` unchanged, both ways, and never reads
+ * `items`/`payload` at all. `items`/`payload` are read ONLY on the
+ * ONE-TEMPLATE-ONE-GAME path below, through {@link boardHasContent} —
+ * `modes` no longer gates that path at all (T1 follow-up: the old
+ * `modes.includes(wanted)` check reused `availableGameModes`'s own "worth
+ * offering" floor, which is why a templated block used to stay stuck on
+ * Básico/the generic layout well after its own board already had something
+ * to show).
  */
-export function modesForBlock(modes: readonly GameMode[], template: QuizTemplate | undefined): GameMode[] {
+export function modesForBlock(
+  modes: readonly GameMode[],
+  template: QuizTemplate | undefined,
+  items: readonly GameItem[],
+  payload?: Payload,
+): GameMode[] {
   if (!template || TEMPLATE_GAME_SWITCHING_ENABLED) return modesForBlockWithSwitching(modes, template);
   // ONE TEMPLATE, ONE GAME: collapse straight to the template's own wanted
-  // mode (see {@link TEMPLATE_DEFAULT_MODE} below) — falling back to `quiz`
-  // alone (never a longer list) only when that game is not yet eligible for
-  // the current content, matching `initialGameMode`'s own fallback rather
-  // than rendering nothing.
-  const wanted = TEMPLATE_DEFAULT_MODE[template];
-  return modes.includes(wanted) ? [wanted] : ['quiz'];
+  // mode (see {@link TEMPLATE_DEFAULT_MODE} below) as soon as its board has
+  // something to show ({@link boardHasContent}) — falling back to `quiz`
+  // alone (never a longer list) only while the board is still empty,
+  // matching `initialGameMode`'s own fallback rather than rendering nothing.
+  return boardHasContent(template, items, payload) ? [TEMPLATE_DEFAULT_MODE[template]] : ['quiz'];
 }
 
 /**
@@ -484,23 +535,28 @@ const TEMPLATE_DEFAULT_MODE: Record<QuizTemplate, GameMode> = {
 };
 
 /**
- * A quiz block's own STARTING game mode (template plumbing, build item 2):
- * the template's wanted mode (see {@link TEMPLATE_DEFAULT_MODE}) when the
- * caller is actually eligible for it right now, `'quiz'` otherwise — a
- * template never forces a mode the current content cannot play (e.g. fewer
- * than `MIN_MATCH_ITEMS` unique answers), it only PREFERS one. The player
- * can still switch away via `QuizGameModeSwitcher` once practising; this
- * only decides where a fresh render starts.
+ * A quiz block's own STARTING game mode (template plumbing, build item 2;
+ * T1 follow-up, "molded previews show the real board"): the template's own
+ * wanted mode (see {@link TEMPLATE_DEFAULT_MODE}) when {@link
+ * modesForBlock} actually OFFERS it, else whatever that function offers
+ * instead — `'quiz'` for Básico (`availableGameModes` always starts with
+ * it) or for a templated block whose own board has nothing to show yet
+ * ({@link boardHasContent}). Reuses `modesForBlock` rather than re-deriving
+ * its own rule, so the two can never disagree about what a fresh render
+ * should open in. A template never forces a mode the current content
+ * cannot play, it only PREFERS one; the player can still switch away via
+ * `QuizGameModeSwitcher` once practising (while {@link
+ * TEMPLATE_GAME_SWITCHING_ENABLED}) — this only decides where a fresh
+ * render starts.
  */
 export function initialGameMode(
   template: QuizTemplate | undefined,
   items: readonly GameItem[],
   payload?: Payload,
 ): GameMode {
-  if (!template) return 'quiz';
-  const wanted = TEMPLATE_DEFAULT_MODE[template];
-  if (wanted === 'quiz') return 'quiz';
-  return availableGameModes(items, payload).includes(wanted) ? wanted : 'quiz';
+  const offered = modesForBlock(availableGameModes(items, payload), template, items, payload);
+  const wanted = template ? TEMPLATE_DEFAULT_MODE[template] : undefined;
+  return wanted && offered.includes(wanted) ? wanted : offered[0] ?? 'quiz';
 }
 
 /**

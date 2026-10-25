@@ -12,15 +12,29 @@
  * item, Enter adds it (a comma-separated paste adds several, same code
  * path, see `groupSort.ts`'s own header), "×" removes it. "Agregar grupo" (a
  * dashed ghost card) stops once {@link MAX_GROUPSORT_GROUPS} groups exist
- * (owner spec: "keep it to 4 max for a big readable board"). Calm,
- * non-blocking notes nudge towards >= 2 groups and >= 2 items per group
- * (`gameModes.ts`'s own eligibility rule) rather than hard-blocking anything
- * — exactly like `MatchPairsEditor`'s own "Agrega al menos 3 parejas" note.
+ * (owner spec: "keep it to 4 max for a big readable board").
+ *
+ * READINESS NEVER CONTRADICTS THE PREVIEW (polish follow-up): the BLOCK-level
+ * amber hint (`groupsort-hint-${blockId}`) is driven ENTIRELY by `playable`
+ * — the exact same `boardHasContent('groupsort', …)` call the live preview's
+ * own empty placeholder is gated on (true as soon as >= 1 group exists, see
+ * that function's own header) — never by the 2-groups/2-items-per-group
+ * eligibility rule. That rule still matters, just not at the block-hint
+ * level any more:
+ * - a group with ZERO items gets its OWN calm, muted {@link Footnote}
+ *   (`groupsort-empty-group-hint-${slotId}`) — never the amber tone, since a
+ *   lone empty group does not make the WHOLE board unplayable;
+ * - the ready line only shows once `playable` AND every group has >= 1 item;
+ * - a separate advisory tip (`groupsort-tip-${blockId}`) nudges towards >= 2
+ *   groups and >= 2 items each (`gameModes.ts`'s own `MIN_GROUPSORT_GROUPS`/
+ *   `MIN_GROUPSORT_ITEMS_PER_GROUP`) once `playable`, exactly like
+ *   `MatchPairsEditor`'s own "more challenging" tip.
  */
 import { useEffect, useRef } from 'react';
 import { SquaresFourIcon } from '@phosphor-icons/react/dist/ssr/SquaresFour';
 import { cn } from '@/lib/utils';
-import { MAX_GROUPSORT_GROUPS, MIN_GROUPSORT_ITEMS_PER_GROUP, type GroupSortGroupRow } from '@/lib/activities/groupSort';
+import { MAX_GROUPSORT_GROUPS, type GroupSortGroupRow } from '@/lib/activities/groupSort';
+import { MIN_GROUPSORT_GROUPS, MIN_GROUPSORT_ITEMS_PER_GROUP } from '@/lib/activities/gameModes';
 import { isMultilinePaste } from '@/lib/activities/pasteLines';
 import { parseGroupSortPaste, type GroupSortPasteOp } from '@/lib/activities/pasteGroupSort';
 import {
@@ -49,10 +63,11 @@ const COPY = {
     removeItem: 'Quitar elemento',
     removeGroup: 'Quitar este grupo',
     addGroup: 'Agregar grupo',
-    minGroupsHint: 'Agrega al menos 2 grupos',
-    minItemsHint: (n: number) => `Agrega al menos ${n} elementos`,
+    emptyHint: 'Agrega un grupo para empezar a jugar',
+    emptyGroupHint: 'Agrega un elemento a este grupo',
     maxGroupsHint: `Máximo ${MAX_GROUPSORT_GROUPS} grupos, para que el tablero se lea bien`,
-    ready: (n: number) => `Listo para jugar · ${n} grupos`,
+    ready: (n: number) => `Listo para jugar · ${n === 1 ? '1 grupo' : `${n} grupos`}`,
+    tip: 'Con 2 grupos o más y al menos 2 elementos en cada uno, el juego es más retador.',
     pasteHint: 'Puedes pegar una lista: una por línea.',
     pasted: (n: number) => `Se ${n === 1 ? 'agregó' : 'agregaron'} ${n === 1 ? '1 grupo' : `${n} grupos`}`,
     pastedWithOverflow: (n: number, dropped: number) =>
@@ -72,10 +87,11 @@ const COPY = {
     removeItem: 'Remove item',
     removeGroup: 'Remove this group',
     addGroup: 'Add group',
-    minGroupsHint: 'Add at least 2 groups',
-    minItemsHint: (n: number) => `Add at least ${n} items`,
+    emptyHint: 'Add a group to start playing',
+    emptyGroupHint: 'Add an item to this group',
     maxGroupsHint: `Up to ${MAX_GROUPSORT_GROUPS} groups, so the board stays easy to read`,
-    ready: (n: number) => `Ready to play · ${n} groups`,
+    ready: (n: number) => `Ready to play · ${n === 1 ? '1 group' : `${n} groups`}`,
+    tip: 'With 2 or more groups and at least 2 items in each, the game is more challenging.',
     pasteHint: 'You can paste a list: one per line.',
     pasted: (n: number) => `${n} ${n === 1 ? 'group' : 'groups'} added`,
     pastedWithOverflow: (n: number, dropped: number) =>
@@ -98,6 +114,16 @@ export interface GroupSortEditorProps {
   blockId: string;
   lang: string;
   groups: GroupSortGroupRow[];
+  /**
+   * Does the LIVE PREVIEW'S own board actually have something to show right
+   * now (`boardHasContent('groupsort', …)`, the SAME debounced payload the
+   * preview itself reads) — see `MatchPairsEditor.tsx`'s own `playable` doc
+   * for the full reasoning. `groupsort`'s own `boardHasContent` is `true` as
+   * soon as a single group exists, even an empty one — see this file's own
+   * header for why the block-level hint and the per-group footnote are two
+   * separate things.
+   */
+  playable: boolean;
   /** The group whose name field should take focus next (a freshly added row) — `null` for none. */
   focusSlotId?: string | null;
   onLabelChange: (slotId: string, label: string) => void;
@@ -129,6 +155,7 @@ export default function GroupSortEditor({
   blockId,
   lang,
   groups,
+  playable,
   focusSlotId = null,
   onLabelChange,
   onAddItems,
@@ -150,7 +177,13 @@ export default function GroupSortEditor({
   }, [focusSlotId]);
 
   const canAddMore = groups.length < MAX_GROUPSORT_GROUPS;
-  const ready = groups.length >= 2 && groups.every((g) => g.items.length >= MIN_GROUPSORT_ITEMS_PER_GROUP);
+  // Ready to play as soon as the board is playable AND every group has
+  // something in it — the 2-groups/2-items-per-group bar below is advisory
+  // (the tip), never a precondition for the ready line itself.
+  const everyGroupHasItem = groups.length > 0 && groups.every((g) => g.items.length > 0);
+  const ready = playable && everyGroupHasItem;
+  const belowChallengeBar =
+    groups.length < MIN_GROUPSORT_GROUPS || groups.some((g) => g.items.length < MIN_GROUPSORT_ITEMS_PER_GROUP);
 
   const soleEmptyGroup = groups.length === 1 && groups[0]!.label.trim() === '' && groups[0]!.items.length === 0;
   const showTeachingPlaceholders = groups.length === 0 || soleEmptyGroup;
@@ -252,10 +285,8 @@ export default function GroupSortEditor({
                 </div>
               </TemplateGroup>
 
-              {group.items.length < MIN_GROUPSORT_ITEMS_PER_GROUP && (
-                <StatusNote tone="warn" testId={`groupsort-min-items-hint-${group.slotId}`}>
-                  {t.minItemsHint(MIN_GROUPSORT_ITEMS_PER_GROUP)}
-                </StatusNote>
+              {group.items.length === 0 && (
+                <Footnote testId={`groupsort-empty-group-hint-${group.slotId}`}>{t.emptyGroupHint}</Footnote>
               )}
             </TemplateCollapse>
           );
@@ -272,15 +303,16 @@ export default function GroupSortEditor({
         <StatusNote tone="ready" testId={`groupsort-paste-feedback-${blockId}`}>
           {feedback.message}
         </StatusNote>
-      ) : groups.length < 2 ? (
-        <StatusNote tone="warn" testId={`groupsort-min-groups-hint-${blockId}`}>
-          {t.minGroupsHint}
+      ) : !playable ? (
+        <StatusNote tone="warn" testId={`groupsort-hint-${blockId}`}>
+          {t.emptyHint}
         </StatusNote>
       ) : ready ? (
         <StatusNote tone="ready" testId={`groupsort-ready-${blockId}`}>
           {t.ready(groups.length)}
         </StatusNote>
       ) : null}
+      {playable && belowChallengeBar && <Footnote testId={`groupsort-tip-${blockId}`}>{t.tip}</Footnote>}
       {showPasteHint && <Footnote testId={`groupsort-paste-hint-${blockId}`}>{t.pasteHint}</Footnote>}
     </div>
   );

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within, act } from '@testing-library/react';
 import { useState } from 'react';
 import { renderThenHydrate } from '@/testSupport/hydrationHarness';
 import QuizBlockEditor from './QuizBlockEditor';
@@ -593,7 +593,23 @@ describe('QuizBlockEditor — "Une las parejas" (build item 1, match authoring)'
     expect(screen.queryByTestId('question-card-s1')).toBeNull();
   });
 
-  it('shows the "add at least 3 pairs" hint until there are 3 complete pairs', () => {
+  it('shows the "complete at least one pair" hint while no pair has an answer', () => {
+    const payload: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'dog', input: 'text', answer: [] }],
+      blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+    };
+    render(<MatchHarness initialPayload={payload} />);
+    expect(screen.getByTestId('match-pairs-hint-b1').textContent).toBe(
+      'Completa al menos una pareja para ver el juego',
+    );
+  });
+
+  // The board is already playable with fewer than 3 answered pairs (any
+  // answer, no duplicates), so the READY line shows — a calmer, muted tip
+  // nudges towards 3+ instead of an amber "not ready" hint (readiness never
+  // contradicts the preview).
+  it('is ready with fewer than 3 pairs, showing a muted tip instead of the amber hint', () => {
     const payload: Payload = {
       pools: {},
       slots: [
@@ -606,10 +622,14 @@ describe('QuizBlockEditor — "Une las parejas" (build item 1, match authoring)'
       ],
     };
     render(<MatchHarness initialPayload={payload} />);
-    expect(screen.getByTestId('match-pairs-hint-b1').textContent).toContain('Agrega al menos 3 parejas');
+    expect(screen.getByTestId('match-pairs-ready-b1').textContent).toBe('Listo para jugar · 2 parejas');
+    expect(screen.queryByTestId('match-pairs-hint-b1')).toBeNull();
+    expect(screen.getByTestId('match-pairs-tip-b1').textContent).toBe(
+      'Con 3 parejas o más, el juego es más retador.',
+    );
   });
 
-  it('hides the hint once there are 3 complete pairs', () => {
+  it('hides the tip once there are 3 or more pairs', () => {
     const payload: Payload = {
       pools: {},
       slots: [
@@ -625,6 +645,7 @@ describe('QuizBlockEditor — "Une las parejas" (build item 1, match authoring)'
     };
     render(<MatchHarness initialPayload={payload} />);
     expect(screen.queryByTestId('match-pairs-hint-b1')).toBeNull();
+    expect(screen.queryByTestId('match-pairs-tip-b1')).toBeNull();
   });
 
   it('"+ Agregar pareja" adds a new row+slot (same storage addQuestion already writes)', () => {
@@ -769,16 +790,28 @@ describe('QuizBlockEditor — "Completar la frase" (cloze authoring)', () => {
     expect(screen.getAllByTestId(/^cloze-sentence-/)).toHaveLength(1);
   });
 
-  it('typing a bracketed sentence commits one drop slot per blank and hides the hint', () => {
-    render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('cloze-add-b1'));
-    const [sentenceInput] = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
-    fireEvent.change(sentenceInput, { target: { value: 'I [was] travelling when I [received] a phone call.' } });
+  // The hint is now gated on `playable` — the SAME debounced payload the
+  // live preview itself reads — so it only hides once that 300ms debounce
+  // catches up with the keystroke, never synchronously with it.
+  it('typing a bracketed sentence commits one drop slot per blank and hides the hint once the debounce catches up', () => {
+    vi.useFakeTimers();
+    try {
+      render(<ClozeHarness initialPayload={EMPTY_PAYLOAD} />);
+      fireEvent.click(screen.getByTestId('cloze-add-b1'));
+      const [sentenceInput] = screen.getAllByTestId(/^cloze-sentence-/) as HTMLInputElement[];
+      fireEvent.change(sentenceInput, { target: { value: 'I [was] travelling when I [received] a phone call.' } });
 
-    expect(screen.queryByTestId('cloze-hint-b1')).toBeNull();
-    expect((sentenceInput as HTMLInputElement).value).toBe(
-      'I [was] travelling when I [received] a phone call.',
-    );
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+
+      expect(screen.queryByTestId('cloze-hint-b1')).toBeNull();
+      expect((sentenceInput as HTMLInputElement).value).toBe(
+        'I [was] travelling when I [received] a phone call.',
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('Enter in a sentence field adds another one and focuses it', () => {
@@ -901,9 +934,9 @@ describe('QuizBlockEditor — "Ordenar por grupos" (groupsort authoring)', () =>
     expect(screen.queryByTestId('question-card-s1')).toBeNull();
   });
 
-  it('shows the "add at least 2 groups" hint until reached', () => {
+  it('shows the "add a group to start playing" hint while there are no groups at all', () => {
     render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
-    expect(screen.getByTestId('groupsort-min-groups-hint-b1').textContent).toContain('Agrega al menos 2 grupos');
+    expect(screen.getByTestId('groupsort-hint-b1').textContent).toBe('Agrega un grupo para empezar a jugar');
   });
 
   it('"+ Agregar grupo" adds a new, empty group row', () => {
@@ -953,17 +986,22 @@ describe('QuizBlockEditor — "Ordenar por grupos" (groupsort authoring)', () =>
     ]);
   });
 
-  it('shows the "add at least 2 items" hint per group until reached, hiding once satisfied', () => {
+  // A group with ZERO items gets its own calm, muted footnote (never the
+  // amber block-level hint) — it hides the instant the group gets its FIRST
+  // item, not only once it reaches 2 (that bar is now the advisory tip).
+  it('shows a muted "add an item to this group" footnote per group while it has zero items, hiding on its first item', () => {
     render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
     fireEvent.click(screen.getByTestId('groupsort-add-b1'));
     const slotId = screen.getAllByTestId(/^groupsort-name-/)[0]!.getAttribute('data-testid')!.replace('groupsort-name-', '');
-    expect(screen.getByTestId(`groupsort-min-items-hint-${slotId}`)).toBeTruthy();
+    expect(screen.getByTestId(`groupsort-empty-group-hint-${slotId}`).textContent).toBe(
+      'Agrega un elemento a este grupo',
+    );
 
     const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`) as HTMLInputElement;
-    fireEvent.change(itemInput, { target: { value: 'dog, cat' } });
+    fireEvent.change(itemInput, { target: { value: 'dog' } });
     fireEvent.keyDown(itemInput, { key: 'Enter' });
 
-    expect(screen.queryByTestId(`groupsort-min-items-hint-${slotId}`)).toBeNull();
+    expect(screen.queryByTestId(`groupsort-empty-group-hint-${slotId}`)).toBeNull();
   });
 
   it('removing an item chip ("×") removes exactly that item', () => {
@@ -1033,7 +1071,8 @@ describe('QuizBlockEditor — "Ordenar por grupos" (groupsort authoring)', () =>
     expect((screen.getByTestId('groupsort-name-g2') as HTMLInputElement).value).toBe('Food');
     expect(screen.getByTestId('groupsort-item-i1').textContent).toContain('dog');
     expect(screen.getByTestId('groupsort-item-i4').textContent).toContain('rice');
-    expect(screen.queryByTestId('groupsort-min-groups-hint-b1')).toBeNull();
+    expect(screen.queryByTestId('groupsort-hint-b1')).toBeNull();
+    expect(screen.getByTestId('groupsort-ready-b1').textContent).toBe('Listo para jugar · 2 grupos');
   });
 
   // Bug S0 (owner audit, `PROPUESTA-PLANTILLAS-2026-10-23.md` §e, screenshot
@@ -1130,6 +1169,38 @@ describe('QuizBlockEditor — template editors share the desk-native sheet + sta
     expect(screen.queryByTestId('quiz-preview-b1')).toBeNull();
   });
 
+  // T1 ("molded previews show the real board, never Básico"): the stage
+  // must key off `boardHasContent` (does THIS mold's own board actually
+  // have something to show), not merely `hasQuestions` (raw authored
+  // ROWS) — a reorder sentence still 1 word is already a "question" (the
+  // ghost row was promoted the instant it was typed into) but not yet a
+  // playable board, so the placeholder stays until the SAME row reaches 2+
+  // words. Reads the debounced payload (`useFakeTimers`, same 300ms
+  // `QuizLivePreview` itself waits on) so a fast typist never sees the
+  // stage blink between the placeholder and the board mid-keystroke.
+  it('keeps the empty placeholder while a reorder sentence is still 1 word, then shows the real board at 2+ words — off the SAME debounced payload the preview itself uses', () => {
+    vi.useFakeTimers();
+    render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+    const ghost = screen.getByTestId('reorder-ghost-sentence-b1') as HTMLInputElement;
+
+    fireEvent.change(ghost, { target: { value: 'I' } });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getByTestId('template-stage-empty-b1')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-preview-b1')).toBeNull();
+
+    const [sentence] = screen.getAllByTestId(/^reorder-sentence-/) as HTMLInputElement[];
+    fireEvent.change(sentence, { target: { value: 'I like' } });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getByTestId('quiz-reorder')).toBeTruthy();
+    expect(screen.queryByTestId('template-stage-empty-b1')).toBeNull();
+
+    vi.useRealTimers();
+  });
+
   it('match: says "Listo para jugar" once 3 complete pairs exist', () => {
     render(<MatchHarness initialPayload={THREE_PAIRS} />);
     expect(screen.getByTestId('match-pairs-ready-b1').textContent).toBe('Listo para jugar · 3 parejas');
@@ -1214,22 +1285,157 @@ describe('QuizBlockEditor — template editors share the desk-native sheet + sta
     expect(screen.getAllByTestId(/^groupsort-name-/)).toHaveLength(4);
   });
 
-  it('groupsort: says "Listo para jugar" once 2 groups have 2 items each', () => {
-    render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
-    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
-    fireEvent.click(screen.getByTestId('groupsort-add-b1'));
-    const slotIds = screen
-      .getAllByTestId(/^groupsort-name-/)
-      .map((n) => n.getAttribute('data-testid')!.replace('groupsort-name-', ''));
-    expect(slotIds).toHaveLength(2);
-    expect(screen.queryByTestId('groupsort-ready-b1')).toBeNull();
+  // `ready` is gated on `playable` (the SAME debounced payload the live
+  // preview reads), so this now needs the debounce to catch up at each
+  // step: 2 still-empty groups are already `playable` (`boardHasContent`
+  // only needs >= 1 group to exist) but not yet `ready` (every group needs
+  // >= 1 item); once both groups get an item, it is ready.
+  it('groupsort: says "Listo para jugar" once every group has at least one item, once the debounce catches up', () => {
+    vi.useFakeTimers();
+    try {
+      render(<GroupSortHarness initialPayload={EMPTY_PAYLOAD} />);
+      fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+      fireEvent.click(screen.getByTestId('groupsort-add-b1'));
+      const slotIds = screen
+        .getAllByTestId(/^groupsort-name-/)
+        .map((n) => n.getAttribute('data-testid')!.replace('groupsort-name-', ''));
+      expect(slotIds).toHaveLength(2);
 
-    for (const slotId of slotIds) {
-      const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`);
-      fireEvent.change(itemInput, { target: { value: 'one, two' } });
-      fireEvent.keyDown(itemInput, { key: 'Enter' });
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(screen.queryByTestId('groupsort-ready-b1')).toBeNull();
+      expect(screen.queryByTestId('groupsort-hint-b1')).toBeNull();
+
+      for (const slotId of slotIds) {
+        const itemInput = screen.getByTestId(`groupsort-item-input-${slotId}`);
+        fireEvent.change(itemInput, { target: { value: 'one, two' } });
+        fireEvent.keyDown(itemInput, { key: 'Enter' });
+      }
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(screen.getByTestId('groupsort-ready-b1').textContent).toBe('Listo para jugar · 2 grupos');
+    } finally {
+      vi.useRealTimers();
     }
-    expect(screen.getByTestId('groupsort-ready-b1').textContent).toBe('Listo para jugar · 2 grupos');
+  });
+});
+
+/**
+ * INVARIANT (polish follow-up): the block-level amber warning
+ * (`*-hint-${blockId}`) shows IF AND ONLY IF the preview stage shows its own
+ * empty placeholder (`template-stage-empty-${blockId}`) — both are driven by
+ * the exact same `boardHasContent(template, …)` call on the exact same
+ * debounced payload, so a reader never sees a readiness line contradict the
+ * board sitting right next to it.
+ */
+describe('QuizBlockEditor — the amber hint never contradicts the preview placeholder (invariant)', () => {
+  const matchQuestionOnly: Payload = {
+    pools: {},
+    slots: [{ id: 's1', label: 'dog', input: 'text', answer: [] }],
+    blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+  };
+  const matchOneAnsweredPair: Payload = {
+    pools: {},
+    slots: [{ id: 's1', label: '', input: 'text', answer: ['perro'] }],
+    blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+  };
+  const matchDuplicateAnswers: Payload = {
+    pools: {},
+    slots: [
+      { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+      { id: 's2', label: 'cat', input: 'text', answer: ['perro'] },
+    ],
+    blocks: [
+      { kind: 'row', id: 'row-s1', slotId: 's1' },
+      { kind: 'row', id: 'row-s2', slotId: 's2' },
+    ],
+  };
+  const reorderOneWord: Payload = {
+    pools: {},
+    slots: [{ id: 's1', label: 'Cats', input: 'text', answer: ['Cats'] }],
+    blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+  };
+  const reorderTwoWords: Payload = {
+    pools: {},
+    slots: [{ id: 's1', label: 'Cats sleep', input: 'text', answer: ['Cats sleep'] }],
+    blocks: [{ kind: 'row', id: 'row-s1', slotId: 's1' }],
+  };
+  const clozeNoBrackets: Payload = {
+    pools: {},
+    slots: [{ id: 'slot-a', label: 'She goes to school.', input: 'text', answer: [] }],
+    blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-a' }],
+  };
+  const clozeOneBracket: Payload = {
+    pools: { 'b1-cloze-pool': [{ id: 'w1', text: 'goes' }] },
+    slots: [{ id: 'slot-a', label: 'She ___ to school.', input: 'drop', pool: 'b1-cloze-pool', answer: ['w1'] }],
+    blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-a' }],
+  };
+  const groupsortOneGroupNoItems: Payload = {
+    pools: {},
+    slots: [{ id: 'g1', label: 'Animals', input: 'group', pool: 'b1-groupsort-pool', answer: [] }],
+    blocks: [{ kind: 'row', id: 'row-g1', slotId: 'g1' }],
+  };
+
+  it.each<[string, React.ComponentType<{ initialPayload: Payload }>, Payload, string]>([
+    ['match: empty', MatchHarness, EMPTY_PAYLOAD, 'match-pairs-hint-b1'],
+    ['match: question only (no answer)', MatchHarness, matchQuestionOnly, 'match-pairs-hint-b1'],
+    ['match: 1 answered pair', MatchHarness, matchOneAnsweredPair, 'match-pairs-hint-b1'],
+    ['match: duplicate answers', MatchHarness, matchDuplicateAnswers, 'match-pairs-hint-b1'],
+    ['reorder: 1 word', ReorderHarness, reorderOneWord, 'reorder-hint-b1'],
+    ['reorder: 2 words', ReorderHarness, reorderTwoWords, 'reorder-hint-b1'],
+    ['cloze: no brackets', ClozeHarness, clozeNoBrackets, 'cloze-hint-b1'],
+    ['cloze: one bracket', ClozeHarness, clozeOneBracket, 'cloze-hint-b1'],
+    ['groupsort: no groups', GroupSortHarness, EMPTY_PAYLOAD, 'groupsort-hint-b1'],
+    ['groupsort: 1 group with 0 items (no block hint, but a per-group footnote shows)', GroupSortHarness, groupsortOneGroupNoItems, 'groupsort-hint-b1'],
+  ])('%s', (_name, Harness, payload, hintTestId) => {
+    render(<Harness initialPayload={payload} />);
+    const hint = screen.queryByTestId(hintTestId);
+    const placeholder = screen.queryByTestId('template-stage-empty-b1');
+    expect(Boolean(hint)).toBe(Boolean(placeholder));
+  });
+
+  // The groupsort "1 group, 0 items" row above: the BLOCK-level hint is
+  // absent (the board already has a group to show), but the per-group
+  // footnote still nudges the author to fill it.
+  it('groupsort: a lone empty group shows its own footnote even while the block hint stays hidden', () => {
+    render(<GroupSortHarness initialPayload={groupsortOneGroupNoItems} />);
+    expect(screen.queryByTestId('groupsort-hint-b1')).toBeNull();
+    expect(screen.getByTestId('groupsort-empty-group-hint-g1').textContent).toBe('Agrega un elemento a este grupo');
+  });
+
+  // Checked at BOTH 0ms and 300ms (not just the final settled state): the
+  // hint and the placeholder must never disagree even mid-debounce, because
+  // they are driven by the exact same debounced value, never a live one.
+  it('stays in sync across the debounce window: checked at 0ms (stale) and 300ms (caught up)', () => {
+    vi.useFakeTimers();
+    try {
+      render(<ReorderHarness initialPayload={EMPTY_PAYLOAD} />);
+      const ghost = screen.getByTestId('reorder-ghost-sentence-b1') as HTMLInputElement;
+      fireEvent.change(ghost, { target: { value: 'Cats sleep' } });
+
+      // t=0: the debounced payload has not caught up yet — both still
+      // reflect the OLD (empty) state, in agreement with each other.
+      expect(Boolean(screen.queryByTestId('reorder-hint-b1'))).toBe(
+        Boolean(screen.queryByTestId('template-stage-empty-b1')),
+      );
+      expect(screen.getByTestId('reorder-hint-b1')).toBeTruthy();
+      expect(screen.getByTestId('template-stage-empty-b1')).toBeTruthy();
+
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+
+      // t=300ms: the debounce fires — both flip to the NEW state together.
+      expect(Boolean(screen.queryByTestId('reorder-hint-b1'))).toBe(
+        Boolean(screen.queryByTestId('template-stage-empty-b1')),
+      );
+      expect(screen.queryByTestId('reorder-hint-b1')).toBeNull();
+      expect(screen.queryByTestId('template-stage-empty-b1')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

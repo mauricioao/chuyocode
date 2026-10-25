@@ -10,15 +10,22 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { User } from '@supabase/supabase-js';
 
-const { clientState, maybeSingleMock, writeOutcomes, fromMock, updateMock, insertMock } =
+const { clientState, maybeSingleMock, writeOutcomes, fromMock, neqMock, updateMock, insertMock } =
   vi.hoisted(() => {
     const maybeSingleMock = vi.fn();
-    const writeOutcomes: Array<{ error: { message: string } | null }> = [];
+    const writeOutcomes: Array<{ data?: unknown; error: { message: string } | null }> = [];
 
     const builder: Record<string, unknown> = {
       maybeSingle: maybeSingleMock,
+      // One affected row by default (the ordinary case — the final activity
+      // update's own `.select('id')`, 0023 follow-up, finds the row it just
+      // wrote). A test simulates "removed concurrently" by pushing
+      // `{ data: [], error: null }` instead.
       then: (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
-        Promise.resolve(writeOutcomes.shift() ?? { error: null }).then(onFulfilled, onRejected),
+        Promise.resolve(writeOutcomes.shift() ?? { data: [{ id: 'row' }], error: null }).then(
+          onFulfilled,
+          onRejected,
+        ),
     };
     const eqMock = vi.fn(() => builder);
     const neqMock = vi.fn(() => builder);
@@ -41,6 +48,8 @@ const { clientState, maybeSingleMock, writeOutcomes, fromMock, updateMock, inser
       maybeSingleMock,
       writeOutcomes,
       fromMock,
+      eqMock,
+      neqMock,
       updateMock,
       insertMock,
     };
@@ -568,6 +577,34 @@ describe('POST /api/actividades/[id]/guardar — activity metadata update', () =
     );
     expect(activityUpdateCall?.[0]).toMatchObject({ title: 'Mi actividad', level: 'A2' });
     expect(typeof (activityUpdateCall?.[0] as Record<string, unknown>).updated_at).toBe('string');
+  });
+});
+
+// 0023 follow-up (the discard/save race `descartar.ts`'s own header names):
+// the final activity update now filters out an already-removed row and
+// reads its own affected rows back, so a save that loses this race 404s
+// instead of silently resurrecting a discarded activity.
+describe('POST /api/actividades/[id]/guardar — final update guard (removed-activity race, 0023 follow-up)', () => {
+  it('filters the final activity update by status != removed and selects id', async () => {
+    await POST(ctx({ body: saveInput() }));
+    // The initial ownership select already applies its own `.neq('status',
+    // 'removed')` (unrelated to this one) — this is the LAST `.neq()` call,
+    // belonging to the final write.
+    expect(neqMock.mock.calls.at(-1)).toEqual(['status', 'removed']);
+  });
+
+  it('404s when the final update affects zero rows (the activity was removed between the existence check and this write)', async () => {
+    writeOutcomes.push({ error: null }); // revision write succeeds
+    writeOutcomes.push({ data: [], error: null }); // final activity update: zero rows
+    const res = await POST(ctx({ body: saveInput() }));
+    expect(res.status).toBe(404);
+  });
+
+  it('200s when the final update affects exactly its own row (the ordinary case)', async () => {
+    writeOutcomes.push({ error: null }); // revision write succeeds
+    writeOutcomes.push({ data: [{ id: ACTIVITY_ID }], error: null }); // final activity update: one row
+    const res = await POST(ctx({ body: saveInput() }));
+    expect(res.status).toBe(200);
   });
 });
 

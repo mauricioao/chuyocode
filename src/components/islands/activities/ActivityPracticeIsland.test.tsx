@@ -78,8 +78,9 @@ describe('ActivityPracticeIsland — game stage sizing (visual-polish pass)', ()
   // a fresh `QuizBlockPractice` each (this file's own header). Both stages
   // qualify for full size containment because they are `flex-1` flex items
   // whose own used height never depends on their content (`scale.ts`'s own
-  // `STAGE_CONTAINER_SIZE` doc) — unlike `QuizLivePreview`'s own column,
-  // which keeps the width-only `@container` instead.
+  // `STAGE_CONTAINER_SIZE` doc) — `QuizLivePreview`'s own column now
+  // qualifies too, bounded by `ActivityPreviewFrame`'s fixed design
+  // viewport instead of the real page's own viewport-bound chain.
   it('marks the normal view\'s quiz stage as a full (both-axis) size container', () => {
     renderIsland([QUIZ]);
     const stage = screen.getByTestId('quiz-practice-q1').parentElement;
@@ -761,8 +762,14 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
   // all — there is no switcher to click any more, see the "starts straight
   // in Parejas mode" test above.
 
-  it('a "match"-templated block still falls back to Varios juegos when not eligible for match (too few unique answers)', () => {
-    const tooFew: QuizBlock = {
+  // T1 ("molded previews show the real board, never Básico"): a match
+  // board needs only SOME content, never `availableGameModes`'s own "worth
+  // OFFERING as an alternative to Básico" floor of 3 pairs — a single pair
+  // is already a playable board, and (same reasoning "hides the combined
+  // footer entirely for a match-only activity" above) its own board-level
+  // Comprobar is the only one, with no page-level footer alongside it.
+  it('a "match"-templated block shows its own board with just ONE pair, with no combined-footer Comprobar beside it', () => {
+    const onePair: QuizBlock = {
       id: 'q2',
       type: 'quiz',
       template: 'match',
@@ -771,9 +778,48 @@ describe('ActivityPracticeIsland — quiz game modes (D1)', () => {
         slots: [{ id: 's1', label: 'The cat ___ on the mat', input: 'text', answer: ['sits'] }],
       },
     };
-    renderIsland([tooFew]);
+    renderIsland([onePair]);
+    expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+    expect(screen.queryByTestId('practice-footer')).toBeNull();
+  });
+
+  // The one thing that still makes a match board unplayable: a DUPLICATE
+  // answer (match grades by tile id, so either right-hand tile would
+  // satisfy it) — falls back to Básico, same as an empty board.
+  it('a "match"-templated block with a duplicate answer falls back to Básico', () => {
+    const duplicateAnswers: QuizBlock = {
+      id: 'q3',
+      type: 'quiz',
+      template: 'match',
+      payload: {
+        pools: {},
+        slots: [
+          { id: 's1', label: 'dog', input: 'text', answer: ['perro'] },
+          { id: 's2', label: 'puppy', input: 'text', answer: ['perro'] },
+        ],
+      },
+    };
+    renderIsland([duplicateAnswers]);
     expect(screen.queryByTestId('quiz-matching')).toBeNull();
-    expect(screen.queryByTestId('practice-quiz-mode-hint')).toBeNull();
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
+  });
+
+  // A reorder board whose only sentence is a single word has nothing to
+  // reorder — falls back to Básico, same reasoning `reorderEligible` (and
+  // `boardHasContent`) already apply everywhere else.
+  it('a "reorder"-templated block whose only sentence is a single word falls back to Básico', () => {
+    const singleWordReorder: QuizBlock = {
+      id: 'q4',
+      type: 'quiz',
+      template: 'reorder',
+      payload: {
+        pools: {},
+        slots: [{ id: 's1', label: 'cat', input: 'text', answer: ['cat'] }],
+      },
+    };
+    renderIsland([singleWordReorder]);
+    expect(screen.queryByTestId('quiz-reorder')).toBeNull();
+    expect(screen.getByTestId('quiz-slot-s1')).toBeTruthy();
   });
 });
 

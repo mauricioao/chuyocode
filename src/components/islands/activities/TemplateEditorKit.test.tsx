@@ -2,12 +2,18 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
+import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import {
+  AddCard,
   AddRow,
   ChipInput,
+  Footnote,
+  GroupLabel,
   ITEM_EXIT_MS,
   RowRemoveButton,
+  SheetHeader,
   StatusNote,
+  TEMPLATE_TOOLBAR_DOCK_MARGIN,
   TemplateEditorLayout,
   TemplateField,
   TemplateGroup,
@@ -298,5 +304,78 @@ describe('usePasteFeedback', () => {
 
     fireEvent.click(screen.getByTestId('edit'));
     expect(screen.getByTestId('feedback').textContent).toBe('');
+  });
+});
+
+// T3 toolbar-dock pass ("enlarge the preview, shrink the data sheet, reduce
+// the font by 1-2pt, dock the toolbar over the preview instead of reserving
+// a gutter for it").
+describe('TEMPLATE_TOOLBAR_DOCK_MARGIN', () => {
+  it('is the canvas padding (16px, the work area\'s own p-4) plus the toolbar\'s own DOCK_MARGIN (12px)', () => {
+    expect(TEMPLATE_TOOLBAR_DOCK_MARGIN).toBe(28);
+  });
+});
+
+describe('TemplateEditorLayout — desktop sizing (T3 toolbar-dock pass)', () => {
+  it('no longer reserves the old lg:pr-[70px] gutter on the work-area wrapper', () => {
+    render(<List />);
+    expect(screen.getByTestId('quiz-editor-b1').className).not.toContain('lg:pr-[70px]');
+  });
+
+  it('shrinks the sheet to the new clamp(360px,36%,440px) width', () => {
+    render(<List />);
+    expect(screen.getByTestId('template-sheet-b1').className).toContain('lg:w-[clamp(360px,36%,440px)]');
+  });
+
+  // Horizontal toolbar pass ("gain space, no reserved gutter at all"): the
+  // rail now docks along the BOTTOM of the stage card instead of the right
+  // edge, so the old right-gutter reservation is gone — replaced by a
+  // bottom one of the same size (12 gap + 42 rail + 12 inset), so the frame
+  // uses the full card WIDTH and only loses room at the bottom.
+  it('no longer reserves lg:pr-[66px]; reserves lg:pb-[66px] instead so the preview frame clears the docked rail', () => {
+    render(<List />);
+    const stage = screen.getByTestId('template-stage-b1');
+    const scrollArea = stage.querySelector('.template-scroll');
+    expect(scrollArea).not.toBeNull();
+    expect(scrollArea!.className).not.toContain('lg:pr-[66px]');
+    expect(scrollArea!.className).toContain('lg:pb-[66px]');
+  });
+});
+
+describe('Template editor kit — desktop type, -1/2pt at lg (T3 toolbar-dock pass)', () => {
+  it('shrinks the SheetHeader title and instruction at lg, phone keeps the base size', () => {
+    render(<SheetHeader icon={PlusIcon} tone="sky" title="Une las parejas" instruction="Arrastra para emparejar" />);
+    expect(screen.getByText('Une las parejas').className).toContain('lg:text-[16px]');
+    expect(screen.getByText('Arrastra para emparejar').className).toContain('lg:text-[12px]');
+  });
+
+  it('shrinks GroupLabel at lg', () => {
+    render(<GroupLabel>Preguntas</GroupLabel>);
+    expect(screen.getByText('Preguntas').className).toContain('lg:text-[12px]');
+  });
+
+  it('shrinks StatusNote at lg', () => {
+    render(
+      <StatusNote tone="ready" testId="note">
+        Listo para jugar
+      </StatusNote>,
+    );
+    expect(screen.getByTestId('note').className).toContain('lg:text-[12px]');
+  });
+
+  it('shrinks Footnote at lg', () => {
+    render(<Footnote testId="foot">Ejemplo: cat, dog</Footnote>);
+    expect(screen.getByTestId('foot').className).toContain('lg:text-[12px]');
+  });
+
+  it('shrinks AddRow and AddCard at lg', () => {
+    render(
+      <>
+        <AddRow label="Agregar pregunta" testId="add-row" onClick={() => {}} />
+        <AddCard label="Agregar grupo" testId="add-card" onClick={() => {}} />
+      </>,
+    );
+    expect(screen.getByTestId('add-row').className).toContain('lg:text-[15px]');
+    expect(screen.getByTestId('add-card').className).toContain('lg:text-[15px]');
   });
 });

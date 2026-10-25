@@ -15,6 +15,7 @@ import {
   deriveGroupSortGroups,
   groupSortPoolName,
   modesForBlock,
+  boardHasContent,
   nearestLockedMode,
   TEMPLATE_GAME_SWITCHING_ENABLED,
   type GameItem,
@@ -199,9 +200,15 @@ describe('initialGameMode (template plumbing, build item 2)', () => {
     { id: '2', prompt: 'b', answer: 'a brown dog' },
     { id: '3', prompt: 'c', answer: 'a blue bird' },
   ];
-  const tooFewForMatch: GameItem[] = [
-    { id: '1', prompt: 'a', answer: 'a red cat' },
-    { id: '2', prompt: 'b', answer: 'a brown dog' },
+  // T1 ("molded previews show the real board, never Básico"): a match board
+  // needs only SOME content, not `availableGameModes`'s own "is this worth
+  // OFFERING as an alternate to Básico" floor of 3 pairs — two items (even
+  // just one) are already a playable board. The one thing that still makes
+  // a match board unplayable is a DUPLICATE answer (match grades by tile
+  // id — `boardHasContent`'s own tests below cover this directly).
+  const duplicateAnswerItems: GameItem[] = [
+    { id: '1', prompt: 'a', answer: 'perro' },
+    { id: '2', prompt: 'b', answer: 'perro' },
   ];
 
   it('starts in quiz with no template ("Básico")', () => {
@@ -212,8 +219,8 @@ describe('initialGameMode (template plumbing, build item 2)', () => {
     expect(initialGameMode('match', eligibleForMatch)).toBe('match');
   });
 
-  it('falls back to quiz for the match template when not (yet) eligible', () => {
-    expect(initialGameMode('match', tooFewForMatch)).toBe('quiz');
+  it('falls back to quiz for the match template when its board has nothing to show (a duplicate answer)', () => {
+    expect(initialGameMode('match', duplicateAnswerItems)).toBe('quiz');
   });
 
   it('falls back to quiz for the groupsort template without a payload (no groups to check)', () => {
@@ -235,10 +242,18 @@ describe('initialGameMode (template plumbing, build item 2)', () => {
     expect(initialGameMode('cloze', eligibleForMatch)).toBe('quiz');
   });
 
-  it('starts in cloze for the cloze template, when the payload has a drop-gap slot', () => {
-    const payload = payloadWith([
-      { id: 's1', label: 'She ___ to school.', input: 'drop', pool: 'p1', answer: ['goes'] },
-    ], { p1: [{ id: 'goes', text: 'goes' }] });
+  it('starts in cloze for the cloze template, when the payload has a playable (drop-gap) sentence', () => {
+    // Needs the `blocks` row carrying the `-cz-s<seq>-b<seq>-` id pattern
+    // `deriveClozeGameSentences` groups blanks by — a raw `drop` slot with
+    // no such row (as a plain Básico gap question might have) is NOT yet a
+    // playable cloze SENTENCE, even though it is still `clozeEligibleCount`-
+    // eligible for Básico's own "Varios juegos" switcher (see that
+    // function's own tests below, unaffected by this one).
+    const payload: Payload = {
+      pools: { p1: [{ id: 'goes', text: 'goes' }] },
+      slots: [{ id: 's1', label: 'She ___ to school.', input: 'drop', pool: 'p1', answer: ['goes'] }],
+      blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 's1' }],
+    };
     expect(initialGameMode('cloze', eligibleForMatch, payload)).toBe('cloze');
   });
 
@@ -346,6 +361,65 @@ describe('initialGameMode (template plumbing, build item 2)', () => {
   });
 });
 
+describe('boardHasContent (T1, "molded previews show the real board, never Básico")', () => {
+  it('match: true with one answered pair, false with a duplicate answer (match grades by tile id)', () => {
+    const onePair: GameItem[] = [{ id: '1', prompt: 'a', answer: 'perro' }];
+    const duplicatePair: GameItem[] = [
+      { id: '1', prompt: 'a', answer: 'perro' },
+      { id: '2', prompt: 'b', answer: 'perro' },
+    ];
+    expect(boardHasContent('match', onePair)).toBe(true);
+    expect(boardHasContent('match', duplicatePair)).toBe(false);
+  });
+
+  it('match: false with no items at all', () => {
+    expect(boardHasContent('match', [])).toBe(false);
+  });
+
+  it('reorder: false for a single-word answer, true once a sentence has 2+ words', () => {
+    const oneWord: GameItem[] = [{ id: '1', prompt: 'a', answer: 'cat' }];
+    const twoWords: GameItem[] = [{ id: '1', prompt: 'a', answer: 'a cat' }];
+    expect(boardHasContent('reorder', oneWord)).toBe(false);
+    expect(boardHasContent('reorder', twoWords)).toBe(true);
+  });
+
+  it('cloze: false for an unclosed bracket (nothing playable yet), true once a bracket closes', () => {
+    // The exact shape `applyClozeSentenceText` persists for each case
+    // (`clozeSentences.ts`'s own header): an unclosed sentence is one
+    // bracket-less `text` slot; a closed one is a `drop`-mechanic slot, its
+    // row id carrying the `-cz-s<seq>-b<seq>-` pattern either way.
+    const unclosed: Payload = {
+      pools: {},
+      slots: [{ id: 's1', label: 'She [is', input: 'text', answer: [] }],
+      blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 's1' }],
+    };
+    const closed: Payload = {
+      pools: { pool: [{ id: 'is', text: 'is' }] },
+      slots: [{ id: 's1', label: 'She ___', input: 'drop', pool: 'pool', answer: ['is'] }],
+      blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 's1' }],
+    };
+    expect(boardHasContent('cloze', [], unclosed)).toBe(false);
+    expect(boardHasContent('cloze', [], closed)).toBe(true);
+  });
+
+  it('cloze: false with no payload at all', () => {
+    expect(boardHasContent('cloze', [])).toBe(false);
+  });
+
+  it('groupsort: true with just one named group even if empty, false with no groups at all', () => {
+    const oneEmptyGroup: Payload = {
+      pools: { p1: [] },
+      slots: [{ id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: [] }],
+    };
+    expect(boardHasContent('groupsort', [], oneEmptyGroup)).toBe(true);
+    expect(boardHasContent('groupsort', [], payloadWith([]))).toBe(false);
+  });
+
+  it('groupsort: false with no payload at all', () => {
+    expect(boardHasContent('groupsort', [])).toBe(false);
+  });
+});
+
 describe('deriveGroupSortGroups / groupSortPoolName', () => {
   it('derives one group per "group"-mechanic slot, in authored order, ignoring any other slot', () => {
     const payload = payloadWith([
@@ -383,28 +457,35 @@ describe('modesForBlock', () => {
     'openbox',
     'groupsort',
   ];
+  const onePair: GameItem[] = [{ id: '1', prompt: 'a', answer: 'perro' }];
+  const twoWordSentence: GameItem[] = [{ id: '1', prompt: 'a', answer: 'a red cat' }];
+  const groupsortPayload = payloadWith(
+    [{ id: 'g1', label: 'Animals', input: 'group', pool: 'p1', answer: ['dog', 'cat'] }],
+    { p1: [{ id: 'dog', text: 'dog' }, { id: 'cat', text: 'cat' }] },
+  );
+  const clozePayload: Payload = {
+    pools: { p1: [{ id: 'goes', text: 'goes' }] },
+    slots: [{ id: 's1', label: 'She ___ to school.', input: 'drop', pool: 'p1', answer: ['goes'] }],
+    blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 's1' }],
+  };
 
   it('TEMPLATE_GAME_SWITCHING_ENABLED is off (owner spec, "no combinemos") — one template, one game', () => {
     expect(TEMPLATE_GAME_SWITCHING_ENABLED).toBe(false);
   });
 
-  it('ONE TEMPLATE, ONE GAME: collapses a templated block to its own single game when eligible', () => {
-    expect(modesForBlock(allModes, 'match')).toEqual(['match']);
-    expect(modesForBlock(allModes, 'groupsort')).toEqual(['groupsort']);
-    // 'reorder'/'cloze' are not themselves in `allModes` above ('reorder' is
-    // derived separately via `reorderEligible`, 'cloze' via `payload`-aware
-    // `clozeEligibleCount`) — exercised on their own lists.
-    expect(modesForBlock(['quiz', 'reorder'], 'reorder')).toEqual(['reorder']);
-    expect(modesForBlock(['quiz', 'cloze'], 'cloze')).toEqual(['cloze']);
+  it('ONE TEMPLATE, ONE GAME: collapses a templated block to its own single game as soon as its board has content — `modes` itself is only read on this path through `boardHasContent`, never as a membership check any more', () => {
+    expect(modesForBlock(allModes, 'match', onePair)).toEqual(['match']);
+    expect(modesForBlock(allModes, 'groupsort', [], groupsortPayload)).toEqual(['groupsort']);
+    expect(modesForBlock(['quiz', 'reorder'], 'reorder', twoWordSentence)).toEqual(['reorder']);
+    expect(modesForBlock(['quiz', 'cloze'], 'cloze', [], clozePayload)).toEqual(['cloze']);
   });
 
-  it('falls back to quiz alone when the template\'s own game is not yet eligible for the content', () => {
-    const noMatch: GameMode[] = ['quiz', 'cards', 'speak'];
-    expect(modesForBlock(noMatch, 'match')).toEqual(['quiz']);
+  it('falls back to quiz alone when the template\'s own board has nothing to show', () => {
+    expect(modesForBlock(allModes, 'match', [])).toEqual(['quiz']);
   });
 
-  it('leaves Básico (undefined) completely unrestricted', () => {
-    expect(modesForBlock(allModes, undefined)).toEqual(allModes);
+  it('leaves Básico (undefined) completely unrestricted, regardless of items/payload', () => {
+    expect(modesForBlock(allModes, undefined, [])).toEqual(allModes);
   });
 });
 

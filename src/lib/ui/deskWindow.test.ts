@@ -581,6 +581,80 @@ describe('initDeskWindow — editor window (PART 6b)', () => {
       expect(confirmCloseCalls).toBe(0);
     });
   });
+
+  // T4, "offer to discard": a VISIBLE (interactive) close on a content-less
+  // draft proposes discarding it INSTEAD OF the ordinary dirty-unsaved-
+  // changes modal — `deskWindow.ts#canCloseNow` checks this FIRST, before its
+  // unchanged dirty branch. `window.deskWindowCanClose` is exposed
+  // unconditionally (not just in embedded mode — see this file's own header
+  // above it), so these sit alongside the other `deskWindowCanClose` test
+  // right above, not inside the `embedded mode` describe block.
+  describe('window.deskWindowCanClose({interactive}) — empty-draft discard prompt (T4)', () => {
+    function emptyDraftGuard(confirmClose: EditorWindowGuard['confirmClose']): EditorWindowGuard {
+      return {
+        isDirty: () => false,
+        isEmptyDraft: () => true,
+        flush: async () => true,
+        confirmClose,
+      };
+    }
+
+    function canCloseOf(win: Window) {
+      return (win as unknown as { deskWindowCanClose: (o?: { interactive?: boolean }) => Promise<boolean> })
+        .deskWindowCanClose;
+    }
+
+    it('interactive + empty draft + clean asks confirmClose("discard"); "cancelled" resolves false', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin();
+      let confirmCloseArg: unknown;
+      (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = emptyDraftGuard(async (variant) => {
+        confirmCloseArg = variant;
+        return 'cancelled';
+      });
+      initDeskWindow(el, '/es/mis-actividades', 'abc', false, document, win);
+
+      await expect(canCloseOf(win)({ interactive: true })).resolves.toBe(false);
+      expect(confirmCloseArg).toBe('discard');
+    });
+
+    it('interactive + empty draft + clean: "discarded" resolves true', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin();
+      (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = emptyDraftGuard(async () => 'discarded');
+      initDeskWindow(el, '/es/mis-actividades', 'abc', false, document, win);
+
+      await expect(canCloseOf(win)({ interactive: true })).resolves.toBe(true);
+    });
+
+    it('no options resolves true without ever asking confirmClose (today\'s behavior, unchanged)', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin();
+      let confirmCloseCalls = 0;
+      (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = emptyDraftGuard(async () => {
+        confirmCloseCalls += 1;
+        return 'cancelled';
+      });
+      initDeskWindow(el, '/es/mis-actividades', 'abc', false, document, win);
+
+      await expect(canCloseOf(win)()).resolves.toBe(true);
+      expect(confirmCloseCalls).toBe(0);
+    });
+
+    it('interactive:false resolves true without asking, even for an empty draft (tray ×/the 8-window cap)', async () => {
+      const el = buildWindowEl();
+      const win = fakeWin();
+      let confirmCloseCalls = 0;
+      (win as unknown as Record<string, unknown>)[EDITOR_WINDOW_GUARD_KEY] = emptyDraftGuard(async () => {
+        confirmCloseCalls += 1;
+        return 'cancelled';
+      });
+      initDeskWindow(el, '/es/mis-actividades', 'abc', false, document, win);
+
+      await expect(canCloseOf(win)({ interactive: false })).resolves.toBe(true);
+      expect(confirmCloseCalls).toBe(0);
+    });
+  });
 });
 
 describe('initDeskOpenWindowLinks', () => {

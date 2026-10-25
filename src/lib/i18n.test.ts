@@ -555,6 +555,16 @@ describe('UI_LABELS — neutral Spanish, SITE-WIDE', () => {
   });
 });
 
+describe('UI_LABELS.activities.editor.unsavedModalTitle — says "actividad"/"activity", never "ejercicio"/"exercise" (its only consumer is ActivityEditorIsland)', () => {
+  it('es', () => {
+    expect(UI_LABELS.es.activities.editor.unsavedModalTitle).toBe('La actividad tiene cambios sin guardar');
+  });
+
+  it('en', () => {
+    expect(UI_LABELS.en.activities.editor.unsavedModalTitle).toBe('This activity has unsaved changes');
+  });
+});
+
 describe('root redirect page (src/pages/index.astro)', () => {
   // The page redirects `/` to the default locale, but it CANNOT reference
   // DEFAULT_LANG: `astro check` does not analyse the contents of a top-level

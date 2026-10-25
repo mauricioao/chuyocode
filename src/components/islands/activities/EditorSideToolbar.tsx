@@ -78,6 +78,23 @@
  * reserves `lg:pr-16` unconditionally (this component's docked slot's own
  * width) regardless of whether THIS component is currently docked there or
  * floating anywhere else — see that component's own header.
+ *
+ * ORIENTATION (horizontal toolbar pass, owner request: "la barra podría
+ * pasar a la parte blanca inferior, en modo horizontal, al pie del bloque
+ * de preview"): `orientation` (`'vertical'` default, `'horizontal'`) picks
+ * the rail's own flex direction (column/row) AND its dock anchor —
+ * `'vertical'` keeps the original right-center anchor, `'horizontal'` docks
+ * along the BOTTOM-right of its host surface instead
+ * (`toolbarPosition.ts`'s own `DockAnchor`). `ActivityEditorIsland.tsx`
+ * passes `'horizontal'` while the active block is a templated quiz block
+ * (same condition as `dockMargin`), so the rail lands along the stage
+ * card's own bottom edge, freeing the right edge for the preview frame.
+ * `dockTarget(size)` below is the ONE place that turns a measured `size`
+ * into a dock-target `Point` for this render — every call site (the
+ * dock-sync resync, the drag-release snap-back, the keyboard nudge, and the
+ * ghost) goes through it, so the anchor can never be missed at one of them.
+ * Below `lg:`, the mobile bar ignores this prop entirely — it never docks
+ * or floats, see `mobileBar` below.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -101,6 +118,7 @@ import {
   parsePersistedToolbarState,
   shouldSnapToDock,
   type Bounds,
+  type DockAnchor,
   type Point,
   type ToolbarSize,
 } from '@/lib/activities/toolbarPosition';
@@ -203,6 +221,24 @@ export interface EditorSideToolbarProps {
    * `ActivityEditorIsland.tsx`'s own portal targets already use.
    */
   onWorksheetToolsSlotReady?: (el: HTMLDivElement | null) => void;
+  /**
+   * Distance from its host surface's right edge (and bottom edge too, in
+   * `'horizontal'` orientation); defaults to `DOCK_MARGIN`. Forwarded as
+   * `dockTargetPosition`'s own third argument at every call site below (via
+   * `dockTarget`, see this file's own header: dock sync, snap-back on drag
+   * end, keyboard nudge, ghost) — `ActivityEditorIsland.tsx`'s own caller
+   * sets this while the active block is a TEMPLATED quiz block, to dock the
+   * rail inside the stage card instead of reserving a gutter for it.
+   */
+  dockMargin?: number;
+  /**
+   * Flex direction AND dock anchor — see this file's own header's
+   * "ORIENTATION" section. Defaults to `'vertical'` (the original column
+   * rail, right-center anchor); `ActivityEditorIsland.tsx` passes
+   * `'horizontal'` alongside `dockMargin` while the active block is a
+   * templated quiz block.
+   */
+  orientation?: 'vertical' | 'horizontal';
 }
 
 /** A single icon button in the rail — factored out so every entry gets the same shape/spacing. */
@@ -298,8 +334,11 @@ export default function EditorSideToolbar({
   saveState,
   saveLabels,
   onWorksheetToolsSlotReady,
+  dockMargin,
+  orientation = 'vertical',
 }: EditorSideToolbarProps) {
   const t = UI_LABELS[lang].activities.editor;
+  const anchor: DockAnchor = orientation === 'horizontal' ? 'bottom-right' : 'right-center';
 
   // Mobile layout pass: below `lg`, this whole component renders as a
   // compact, ALWAYS-DOCKED bottom action bar instead — see the early
@@ -338,6 +377,16 @@ export default function EditorSideToolbar({
   // instead of the (possibly not-yet-re-rendered) `position` state, so the
   // drag never commits a stale position.
   const latestDragPositionRef = useRef<Point>({ x: 0, y: 0 });
+
+  // The ONE place a measured `size` becomes a dock-target `Point` for this
+  // render (this file's own header, "ORIENTATION") — every call site below
+  // (the dock-sync resync, the drag-release snap-back, the keyboard nudge,
+  // and the ghost) goes through this instead of calling `dockTargetPosition`
+  // directly, so the anchor can never be missed at one of them.
+  const dockTarget = useCallback(
+    (size: ToolbarSize, bounds: Bounds = measureBounds()) => dockTargetPosition(size, bounds, dockMargin, anchor),
+    [dockMargin, anchor],
+  );
 
   // ONE unified effect for both "hydrate from localStorage on mount" and
   // "keep `position` synced to the window's own dock slot while docked" —
@@ -386,7 +435,18 @@ export default function EditorSideToolbar({
       }
     }
 
-    if (!docked) return undefined;
+    if (!docked) {
+      // Orientation-flip re-clamp (horizontal toolbar pass): `size` above is
+      // this render's REAL rail size — a saved/dragged position computed
+      // under the OTHER orientation (e.g. a tall vertical-era position now
+      // holding a ~320px-wide horizontal rail) could sit outside the
+      // viewport once the rail's own box changes shape. Re-clamping (never
+      // re-fitting — there is no "fit" here, just "stay visible") on every
+      // run of THIS effect, not only on resize, is what catches that: the
+      // effect's own deps include `orientation`.
+      setPosition((prev) => clampToolbarPosition(prev, size, measureViewportBounds()));
+      return undefined;
+    }
 
     // Keep `position` synced to the WINDOW's own current dock slot: a
     // `MutationObserver` on the window's own `style` attribute
@@ -395,7 +455,7 @@ export default function EditorSideToolbar({
     // window never fires its own custom "moved" event, but it DOES always
     // touch its own `style` when it moves, which this observes directly.
     function resync() {
-      setPosition(dockTargetPosition(measureSize(railRef.current), measureBounds()));
+      setPosition(dockTarget(measureSize(railRef.current)));
       setReady(true); // a no-op once already true — every later resync (window moved/resized) keeps it visible.
     }
     resync();
@@ -418,7 +478,14 @@ export default function EditorSideToolbar({
       railObserver?.disconnect();
       window.removeEventListener('resize', resync);
     };
-  }, [docked]);
+    // `orientation` (re-syncs at the new anchor, and re-clamps an undocked
+    // rail on the flip — see the `!docked` branch above) and `hydrated`
+    // (this effect's own `ResizeObserver`/`MutationObserver` would otherwise
+    // stay attached to a rail DOM node React tears down and replaces across
+    // the hydration remount — see `hydrated`'s own header below — leaving
+    // them observing a detached element) both joined `[docked, dockMargin]`
+    // for the horizontal toolbar pass.
+  }, [docked, dockMargin, orientation, hydrated]);
 
   // Persist on every `docked`/`position` change — EXCEPT the very first run
   // (mount), which would otherwise write the not-yet-hydrated DOCKED default
@@ -549,13 +616,13 @@ export default function EditorSideToolbar({
     // now) — but "close enough to re-dock" still targets the WINDOW's own
     // current slot (`measureBounds`), wherever it is on screen.
     const finalPosition = clampToolbarPosition(latestDragPositionRef.current, size, measureViewportBounds());
-    const target = dockTargetPosition(size, measureBounds());
+    const target = dockTarget(size);
     if (shouldSnapToDock(finalPosition, target)) {
       setDocked(true);
     } else {
       setPosition(finalPosition);
     }
-  }, []);
+  }, [dockTarget]);
 
   const handlePointerUp = useCallback(() => endDrag(), [endDrag]);
   const handlePointerCancel = useCallback(() => endDrag(), [endDrag]);
@@ -587,7 +654,7 @@ export default function EditorSideToolbar({
       // docked (`measureBounds`) — but the nudged result is a floating
       // position, clamped to the full VIEWPORT like every other undocked
       // move.
-      const current = docked ? dockTargetPosition(size, measureBounds()) : position;
+      const current = docked ? dockTarget(size) : position;
       const clamped = clampToolbarPosition(
         { x: current.x + delta.x * step, y: current.y + delta.y * step },
         size,
@@ -596,7 +663,7 @@ export default function EditorSideToolbar({
       setDocked(false);
       setPosition(clamped);
     },
-    [docked, position, dock],
+    [docked, position, dock, dockTarget],
   );
 
   // The ghost dock target's own position (small circle centered where the
@@ -606,8 +673,7 @@ export default function EditorSideToolbar({
   // state).
   const ghostPosition = !docked
     ? (() => {
-        const bounds = measureBounds();
-        const target = dockTargetPosition(railSize, bounds);
+        const target = dockTarget(railSize);
         return {
           x: target.x + (railSize.width - DOCK_TARGET_SIZE) / 2,
           y: target.y + (railSize.height - DOCK_TARGET_SIZE) / 2,
@@ -619,6 +685,15 @@ export default function EditorSideToolbar({
   // real position lands, then a short fade — never a silent `visibility`
   // flip, which would skip the fade entirely.
   const readyOpacityClass = ready ? 'opacity-100' : 'opacity-0';
+
+  // ONE markup tree below for both orientations (this file's own header,
+  // "ORIENTATION") — these three class maps are the only thing that
+  // actually differs: the rail's own flex direction, every hairline
+  // separator between groups, and the drag handle's own long axis.
+  const isHorizontal = orientation === 'horizontal';
+  const railDirectionClass = isHorizontal ? 'flex-row' : 'flex-col';
+  const separatorClass = isHorizontal ? 'mx-1 h-6 w-px flex-none bg-border' : 'my-1 h-px w-6 bg-border';
+  const handleSizeClass = isHorizontal ? 'h-7 w-4' : 'h-4 w-7';
 
   const mobileBar = (
     <div
@@ -732,6 +807,7 @@ export default function EditorSideToolbar({
       ref={railRef}
       data-testid="editor-side-toolbar"
       data-docked={docked}
+      data-orientation={orientation}
       className={
         // Both states are `fixed` at an explicit `{ left, top }` now (see
         // the file header) — `position` is kept live either way, so there is
@@ -744,9 +820,11 @@ export default function EditorSideToolbar({
         // convention) — this is a plain `document.body`-level sibling of
         // `#desk-window` now, not a descendant, so without it the window
         // would win ordinary stacking comparisons wherever the two overlap.
+        // `railDirectionClass` (column/row) is the ONE structural change
+        // `orientation` makes to this surface itself.
         docked
-          ? `fixed z-[60] flex flex-col items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2 transition-opacity duration-150 motion-reduce:transition-none ${readyOpacityClass}`
-          : `glass-floating fixed z-[60] flex flex-col items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating) transition-opacity duration-150 motion-reduce:transition-none ${readyOpacityClass}`
+          ? `fixed z-[60] flex ${railDirectionClass} items-center gap-1 rounded-(--radius-pill) border border-border bg-card p-1.5 shadow-elevation-2 transition-opacity duration-150 motion-reduce:transition-none ${readyOpacityClass}`
+          : `glass-floating fixed z-[60] flex ${railDirectionClass} items-center gap-1 rounded-(--radius-pill) p-1.5 ring-1 ring-(--color-glass-ring) shadow-(--shadow-floating) transition-opacity duration-150 motion-reduce:transition-none ${readyOpacityClass}`
       }
       style={{ left: position.x, top: position.y }}
     >
@@ -759,7 +837,7 @@ export default function EditorSideToolbar({
         {docked ? <PushPinIcon aria-hidden="true" /> : <PushPinSlashIcon aria-hidden="true" />}
       </ToolbarIconButton>
 
-      <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
+      <div className={separatorClass} aria-hidden="true" />
 
       <div
         ref={handleRef}
@@ -768,7 +846,7 @@ export default function EditorSideToolbar({
         aria-label={t.moveToolbar}
         title={t.moveToolbar}
         data-testid="toolbar-drag-handle"
-        className={`flex h-4 w-7 touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`flex ${handleSizeClass} touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -780,17 +858,22 @@ export default function EditorSideToolbar({
         <DotsSixVerticalIcon aria-hidden="true" />
       </div>
 
-      <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
+      <div className={separatorClass} aria-hidden="true" />
 
       {/* One-sheet redesign — see this file's own header and the mobile
-          bar's matching slot above. */}
+          bar's matching slot above. `peer` + the NEXT separator's own
+          `peer-empty:hidden` (both orientations) collapses that separator
+          away whenever this slot is empty (a quiz block, or nothing
+          selected yet) — fixes a pre-existing doubled separator for every
+          non-worksheet block; a worksheet's own slot is never empty, so it
+          is unaffected. */}
       <div
         ref={onWorksheetToolsSlotReady}
         data-testid="worksheet-tools-slot"
-        className="empty:hidden flex flex-col items-center gap-1"
+        className={`peer empty:hidden flex ${railDirectionClass} items-center gap-1`}
       />
 
-      <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
+      <div className={`${separatorClass} peer-empty:hidden`} aria-hidden="true" />
 
       <ToolbarIconButton
         label={preview ? t.previewOff : t.previewOn}
@@ -800,7 +883,7 @@ export default function EditorSideToolbar({
         {preview ? <EyeSlashIcon aria-hidden="true" /> : <EyeIcon aria-hidden="true" />}
       </ToolbarIconButton>
 
-      <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
+      <div className={separatorClass} aria-hidden="true" />
 
       <ToolbarIconButton label={t.undo} testId="undo-button" disabled={!canUndo} onClick={onUndo}>
         <ArrowUUpLeftIcon aria-hidden="true" />
@@ -809,11 +892,11 @@ export default function EditorSideToolbar({
         <ArrowUUpRightIcon aria-hidden="true" />
       </ToolbarIconButton>
 
-      <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
+      <div className={separatorClass} aria-hidden="true" />
 
       <ShortcutsDialog lang={lang} />
 
-      <div className="my-1 h-px w-6 bg-border" aria-hidden="true" />
+      <div className={separatorClass} aria-hidden="true" />
 
       <ToolbarIconButton
         label={t.save}
@@ -824,7 +907,11 @@ export default function EditorSideToolbar({
       >
         <FloppyDiskIcon aria-hidden="true" />
       </ToolbarIconButton>
-      <SaveStatusIndicator status={saveState} onRetry={onSave} labels={saveLabels} />
+      {/* Fixed-size slot (both orientations) so the error state's own retry
+          button swapping in/out never shifts the rest of the bar. */}
+      <div data-testid="save-status-slot" className="flex size-7 flex-none items-center justify-center">
+        <SaveStatusIndicator status={saveState} onRetry={onSave} labels={saveLabels} />
+      </div>
     </div>
     </>
   );

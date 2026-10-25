@@ -12,6 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { useLayoutEffect } from 'react';
 import type { Payload } from '@/lib/exercisePayload';
 import { GAME_SOUND_MUTE_KEY } from '@/lib/activities/gameSounds';
 import QuizCloze from './QuizCloze';
@@ -57,6 +58,13 @@ const TWO_BLANK_PAYLOAD: Payload = {
     { kind: 'row', id: 'row-cz-s0-b0-1', slotId: 'slot-s0b0' },
     { kind: 'row', id: 'row-cz-s0-b1-2', slotId: 'slot-s0b1' },
   ],
+};
+
+/** Same shape as {@link TWO_SENTENCE_PAYLOAD}, minus its second sentence/block — for the "current sentence disappears" hook-order fix-round tests below. */
+const ONE_SENTENCE_PAYLOAD: Payload = {
+  pools: TWO_SENTENCE_PAYLOAD.pools,
+  slots: [TWO_SENTENCE_PAYLOAD.slots[0]!],
+  blocks: [TWO_SENTENCE_PAYLOAD.blocks![0]!],
 };
 
 describe('QuizCloze', () => {
@@ -383,6 +391,64 @@ describe('QuizCloze', () => {
     it('shows an open-hand cursor on an idle tray tile', () => {
       render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
       expect(screen.getByTestId('cloze-tile-w-sleep').className).toContain('cursor-grab');
+    });
+  });
+
+  // Hook-order / crash fix-round (T1, "molded previews show the real
+  // board"): the current sentence used to be read with a bare
+  // `sentences[index]!` (non-null assertion) BEFORE this board's own
+  // `useFlip`/`useGameDndSensors`/`useGrabCursor` calls. A board that LOSES
+  // its own current sentence (the author deletes it, or a later rerender
+  // simply has fewer sentences while `index` is still pointing past the
+  // end) crashed on that assertion instead of falling back to a sentence
+  // still on screen; a board that GAINS a sentence after starting at zero
+  // called those three hooks for the first time on a LATER render, throwing
+  // "Rendered fewer hooks than expected".
+  describe('a sentence can appear or disappear without crashing', () => {
+    it('falls back to the first sentence when the current index no longer exists, with no throw', () => {
+      const { rerender } = render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+      fireEvent.click(screen.getByTestId('cloze-next'));
+      expect(screen.getByTestId('cloze-position').textContent).toBe('2 de 2');
+
+      expect(() => rerender(<QuizCloze lang="es" payload={ONE_SENTENCE_PAYLOAD} seed="block-1" />)).not.toThrow();
+      expect(screen.getByTestId('cloze-game-sentence-0')).toBeTruthy();
+    });
+
+    it('does not throw across a 0 -> 1 -> 0 sentence rerender (every hook stays unconditional)', () => {
+      const { rerender } = render(<QuizCloze lang="es" payload={{ pools: {}, slots: [] }} seed="block-1" />);
+      expect(() => rerender(<QuizCloze lang="es" payload={ONE_SENTENCE_PAYLOAD} seed="block-1" />)).not.toThrow();
+      expect(() => rerender(<QuizCloze lang="es" payload={{ pools: {}, slots: [] }} seed="block-1" />)).not.toThrow();
+    });
+
+    // The display-index bug: `sentence` itself already falls back to
+    // `sentences[0]` when `index` points past the new (shorter) list, but
+    // the POSITION COUNTER used to read the raw, stale `index` directly —
+    // showing "2 de 1" (a position that cannot exist) on the very commit
+    // that drops the second sentence, one render before the `[payload]`
+    // effect corrects `index` back to 0. A plain post-hoc read of
+    // `cloze-position` cannot catch a value that only existed for one
+    // intermediate commit — this parent `useLayoutEffect` probe fires (and
+    // records the DOM text) on every one of ITS OWN commits, which includes
+    // the first (buggy) commit caused by the test's own `rerender` call
+    // below, before any corrective child-only re-render that follows it.
+    it('never commits "2 de 1" — the position label must reflect the NEW sentence count on the very render that drops a sentence', () => {
+      const commits: string[] = [];
+      function PositionProbe({ payload }: { payload: Payload }) {
+        useLayoutEffect(() => {
+          commits.push(screen.getByTestId('cloze-position').textContent ?? '');
+        });
+        return <QuizCloze lang="es" payload={payload} seed="block-1" />;
+      }
+
+      const { rerender } = render(<PositionProbe payload={TWO_SENTENCE_PAYLOAD} />);
+      fireEvent.click(screen.getByTestId('cloze-next'));
+      expect(screen.getByTestId('cloze-position').textContent).toBe('2 de 2');
+      commits.length = 0;
+
+      rerender(<PositionProbe payload={ONE_SENTENCE_PAYLOAD} />);
+
+      expect(commits).not.toContain('2 de 1');
+      expect(screen.getByTestId('cloze-position').textContent).toBe('1 de 1');
     });
   });
 });

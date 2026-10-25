@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import ActivityEditorIsland from './ActivityEditorIsland';
 import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
+import { TEMPLATE_TOOLBAR_DOCK_MARGIN } from './TemplateEditorKit';
+import { DOCK_MARGIN } from '@/lib/activities/toolbarPosition';
 
 const pipelineMocks = vi.hoisted(() => ({
   routeFileType: vi.fn(),
@@ -388,13 +390,154 @@ describe('ActivityEditorIsland — no side toolbar while the empty-blocks picker
   });
 });
 
+// T3 toolbar-dock pass, then the horizontal toolbar pass: while the ACTIVE
+// block is a TEMPLATED quiz block (match/reorder/cloze/groupsort), the side
+// toolbar docks INSIDE the preview/stage card, along its BOTTOM-right corner
+// (`orientation="horizontal"`, `TEMPLATE_TOOLBAR_DOCK_MARGIN`) instead of the
+// window's default right edge, right-center (`DOCK_MARGIN`) — keyed on the
+// active block alone, never on preview mode (owner report: otherwise the
+// rail moves 16px when the eye/preview button is clicked). jsdom has no real
+// layout and this standalone island render has no `[data-desk-window-body]`
+// either (`EditorSideToolbar.test.tsx`'s own header), so `measureBounds()`
+// falls back to the full `{0, innerWidth, 0, innerHeight}` — fixed here for
+// deterministic left-position numbers. The x formula (`bounds.right - width
+// - margin`) is IDENTICAL for both dock anchors, so the existing left-only
+// assertions below stay valid unchanged under the new bottom-right anchor —
+// only `data-orientation` and `top` actually depend on it.
+describe('ActivityEditorIsland — side toolbar docks inside the stage for a templated block (T3)', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'innerWidth', { value: 1000, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 700, configurable: true });
+  });
+
+  afterEach(() => {
+    // jsdom's own defaults — restored so no later test in this file inherits
+    // the fixed size above.
+    Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 768, configurable: true });
+  });
+
+  it('docks the rail at innerWidth-minus-TEMPLATE_TOOLBAR_DOCK_MARGIN for a templated (match) block', () => {
+    const matchBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: ['perro'] }] },
+    };
+    renderEditor({ initialBlocks: [matchBlock] });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.style.left).toBe(`${window.innerWidth - TEMPLATE_TOOLBAR_DOCK_MARGIN}px`);
+  });
+
+  it('is horizontal for a templated (match) block', () => {
+    const matchBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: ['perro'] }] },
+    };
+    renderEditor({ initialBlocks: [matchBlock] });
+    expect(screen.getByTestId('editor-side-toolbar').getAttribute('data-orientation')).toBe('horizontal');
+  });
+
+  it('keeps the default DOCK_MARGIN for a worksheet block (not a quiz block at all)', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.style.left).toBe(`${window.innerWidth - DOCK_MARGIN}px`);
+  });
+
+  it('is vertical for a worksheet block', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    expect(screen.getByTestId('editor-side-toolbar').getAttribute('data-orientation')).toBe('vertical');
+  });
+
+  it('keeps the default DOCK_MARGIN for a Básico quiz block (no template)', () => {
+    const basicBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'The cat ___', input: 'text', answer: ['sits'] }] },
+    };
+    renderEditor({ initialBlocks: [basicBlock] });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    expect(rail.style.left).toBe(`${window.innerWidth - DOCK_MARGIN}px`);
+  });
+
+  it('is vertical for a Básico quiz block (no template)', () => {
+    const basicBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'The cat ___', input: 'text', answer: ['sits'] }] },
+    };
+    renderEditor({ initialBlocks: [basicBlock] });
+    expect(screen.getByTestId('editor-side-toolbar').getAttribute('data-orientation')).toBe('vertical');
+  });
+
+  it('leaves the rail position unchanged when toggling preview — keyed on the active block, not preview mode', () => {
+    const matchBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: ['perro'] }] },
+    };
+    renderEditor({ initialBlocks: [matchBlock] });
+    const rail = screen.getByTestId('editor-side-toolbar');
+    const beforeLeft = rail.style.left;
+    const beforeTop = rail.style.top;
+
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(rail.style.left).toBe(beforeLeft);
+    expect(rail.style.top).toBe(beforeTop);
+
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(rail.style.left).toBe(beforeLeft);
+    expect(rail.style.top).toBe(beforeTop);
+  });
+});
+
 describe('ActivityEditorIsland — window title bar: the EDITABLE title (PART 6b polish)', () => {
-  it('portals the real controlled title input and level select into the title group slot (status now floats separately, build item 3)', () => {
+  // T2 titlebar polish (owner report: "el combo de nivel queda desplazado a
+  // la izquierda... quita el espacio que ocupan para que el título también
+  // se vea centrado"): the level select moved OUT of this title group —
+  // where it used to compete with the title for the row's own leftover
+  // space — and INTO the actions slot, docked against the bar's right edge
+  // alongside the other icon/button controls (status badge already floats
+  // separately, build item 3, unchanged by this pass). See
+  // `desktopActions`'s own header in `ActivityEditorIsland.tsx`.
+  it('portals the real controlled title input into the title group slot, and docks the level select in the actions slot instead', () => {
     renderEditor({ initialTitle: 'Mi actividad', initialLevel: 'B1' });
     const group = document.getElementById('desk-window-title-group')!;
+    const actionsSlot = document.getElementById('desk-window-actions')!;
     expect(group.contains(screen.getByTestId('activity-title-input'))).toBe(true);
-    expect(group.contains(screen.getByTestId('activity-level-select'))).toBe(true);
+    expect(group.contains(screen.getByTestId('activity-level-select'))).toBe(false);
+    expect(actionsSlot.contains(screen.getByTestId('activity-level-select'))).toBe(true);
     expect(group.contains(screen.getByTestId('activity-status-badge'))).toBe(false);
+  });
+
+  // Owner spec continued ("Nivel | íconos | botón de enviar"): left to
+  // right, the actions slot now reads level select first, then the
+  // "Ver como presentación" icon button, then the one primary action —
+  // same relative order the title bar already read before this pass, just
+  // with the level select relocated into this slot instead of the title
+  // group.
+  it('orders the actions slot as level select, then the presentation button, then the primary submit button', () => {
+    renderEditor({ initialLevel: 'B1' });
+    const actionsSlot = document.getElementById('desk-window-actions')!;
+    const order = [...actionsSlot.querySelectorAll('[data-testid]')].map((el) => el.getAttribute('data-testid'));
+    const levelIndex = order.indexOf('activity-level-select');
+    const presentationIndex = order.indexOf('view-as-presentation-button');
+    const submitIndex = order.indexOf('submit-for-review-button');
+    expect(levelIndex).toBeGreaterThanOrEqual(0);
+    expect(presentationIndex).toBeGreaterThan(levelIndex);
+    expect(submitIndex).toBeGreaterThan(presentationIndex);
+  });
+
+  // Owner report continued: "quita los bordes de esos íconos al lado del
+  // nivel; no aportan nada salvo hacer más alta la barra superior" — see
+  // `iconTooltip.ts`'s own `ICON_TOOLTIP_TRIGGER_CLASS` header for the
+  // matching change (flat `size-9`, `border-transparent`).
+  it('renders the presentation trigger with no visible border (ICON_TOOLTIP_TRIGGER_CLASS, T2 titlebar polish)', () => {
+    renderEditor();
+    expect(screen.getByTestId('view-as-presentation-button').className).not.toContain('border-border');
   });
 
   it('has "Nueva actividad" as its placeholder and an accessible label', () => {
@@ -404,10 +547,15 @@ describe('ActivityEditorIsland — window title bar: the EDITABLE title (PART 6b
     expect(input.getAttribute('aria-label')).toBe('Título');
   });
 
-  it('never throws, and simply renders no title group, when mounted without the DeskWindow shell', () => {
+  // T2 titlebar polish follow-up: this portal target's own content is now
+  // just the title input (the level select moved to the actions portal
+  // instead, see `desktopActions`'s own header) — so the defensive-render
+  // probe checks the TITLE INPUT is absent here, not the level select,
+  // which lives in (and is covered by) the actions-portal probe below.
+  it('never throws, and simply renders no title-group content, when mounted without that portal target', () => {
     document.getElementById('desk-window-title-group')?.remove();
     expect(() => renderEditor()).not.toThrow();
-    expect(screen.queryByTestId('activity-level-select')).toBeNull();
+    expect(screen.queryByTestId('activity-title-input')).toBeNull();
   });
 });
 
@@ -425,7 +573,7 @@ function stubMobileViewport() {
 }
 
 describe('ActivityEditorIsland — mobile title bar "⋯" menu (bug fix, owner report: title truncated to "Hoj…" on a 390px phone)', () => {
-  it('on desktop, shows no "⋯" trigger — the level select/status badge/actions stay inline exactly as before', () => {
+  it('on desktop, shows no "⋯" trigger — the level select and actions stay inline in the title bar', () => {
     renderEditor();
     expect(screen.queryByTestId('activity-mobile-menu-trigger')).toBeNull();
     expect(screen.getByTestId('activity-level-select')).toBeTruthy();
@@ -478,20 +626,41 @@ describe('ActivityEditorIsland — window title bar sync (PART 6b)', () => {
     expect(document.getElementById('desk-window-title')?.textContent).toBe('New activity');
   });
 
-  it('renders "Ver como presentación" and "Enviar a revisión" into the window title bar actions slot, not the header row', () => {
+  it('renders "Ver como presentación", "Enviar a revisión" and the level select into the window title bar actions slot, not the header row', () => {
     renderEditor();
     const actionsSlot = document.getElementById('desk-window-actions');
     expect(actionsSlot?.contains(screen.getByTestId('view-as-presentation-button'))).toBe(true);
     expect(actionsSlot?.contains(screen.getByTestId('submit-for-review-button'))).toBe(true);
+    expect(actionsSlot?.contains(screen.getByTestId('activity-level-select'))).toBe(true);
     expect(screen.getByTestId('activity-editor-card').contains(screen.getByTestId('submit-for-review-button'))).toBe(
       false,
     );
+  });
+
+  // With the level select now sharing the actions slot, a ~1000-1150px window
+  // leaves less room than "Enviar de nuevo a revisión" needs: the submit
+  // button must shrink and ellipsize instead of spilling past the window's
+  // edge. The full label stays its accessible name and its tooltip.
+  it('lets the submit button shrink and ellipsize its label instead of overflowing the title bar', () => {
+    renderEditor();
+    const submit = screen.getByTestId('submit-for-review-button');
+    const classes = submit.className.split(/\s+/);
+    expect(classes).toContain('min-w-0');
+    expect(classes).toContain('shrink');
+    expect(classes).not.toContain('shrink-0');
+    const label = submit.querySelector('span.truncate');
+    expect(label?.textContent).toBe('Enviar a revisión');
+    expect(submit.getAttribute('title')).toBe('Enviar a revisión');
+    expect(submit.textContent).toBe('Enviar a revisión');
   });
 
   it('never throws, and simply renders no title-bar actions, when mounted without the DeskWindow shell', () => {
     document.getElementById('desk-window-actions')?.remove();
     expect(() => renderEditor()).not.toThrow();
     expect(screen.queryByTestId('submit-for-review-button')).toBeNull();
+    // T2 titlebar polish: the level select now portals here too — same
+    // defensive probe covers it.
+    expect(screen.queryByTestId('activity-level-select')).toBeNull();
   });
 });
 
@@ -601,6 +770,114 @@ describe('ActivityEditorIsland — EditorWindowGuard bridge (PART 6b)', () => {
     });
     expect(await pending).toBe('saved');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ActivityEditorIsland — discard an empty draft (T4, "offer to discard")', () => {
+  // Same literal shape `ActivityStartIsland.tsx` POSTs for "Une las parejas" — no questions yet.
+  const FRESH_MATCH_BLOCK: Block = {
+    id: 'q1',
+    type: 'quiz',
+    template: 'match',
+    payload: { pools: {}, slots: [] },
+  };
+
+  function getGuard() {
+    return (window as unknown as Record<string, unknown>)['__inglesEditorWindowGuard'] as {
+      isEmptyDraft: () => boolean;
+      confirmClose: (variant?: 'discard') => Promise<'saved' | 'discarded' | 'cancelled'>;
+    };
+  }
+
+  it('isEmptyDraft() is true for a zero-block draft', () => {
+    renderEditor();
+    expect(getGuard().isEmptyDraft()).toBe(true);
+  });
+
+  it('isEmptyDraft() is true for a fresh match mold with no questions yet', () => {
+    renderEditor({ initialBlocks: [FRESH_MATCH_BLOCK] });
+    expect(getGuard().isEmptyDraft()).toBe(true);
+  });
+
+  it('isEmptyDraft() stays true after editing only the title (the title does not count as content)', () => {
+    renderEditor();
+    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'Nuevo nombre' } });
+    expect(getGuard().isEmptyDraft()).toBe(true);
+  });
+
+  it('isEmptyDraft() is false once a worksheet block has an uploaded image', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    expect(getGuard().isEmptyDraft()).toBe(false);
+  });
+
+  it('isEmptyDraft() is false for a non-draft activity, even with zero blocks', () => {
+    renderEditor({ initialStatus: 'live' });
+    expect(getGuard().isEmptyDraft()).toBe(false);
+  });
+
+  it('confirmClose("discard"): "Descartar" posts to the discard endpoint with keepalive and resolves "discarded"', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+    const guard = getGuard();
+    let pending!: Promise<'saved' | 'discarded' | 'cancelled'>;
+    act(() => {
+      pending = guard.confirmClose('discard');
+    });
+    expect(screen.getByTestId('unsaved-modal-discard')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('unsaved-modal-discard'));
+    expect(await pending).toBe('discarded');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/actividades/act-1/descartar',
+      expect.objectContaining({ method: 'POST', keepalive: true }),
+    );
+  });
+
+  it('confirmClose("discard"): "Guardar y salir" only saves — it never calls the discard endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+    const guard = getGuard();
+    let pending!: Promise<'saved' | 'discarded' | 'cancelled'>;
+    act(() => {
+      pending = guard.confirmClose('discard');
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('unsaved-modal-save-and-leave'));
+    });
+    expect(await pending).toBe('saved');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/actividades/act-1/guardar', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('confirmClose("discard"): "Cancelar" makes no fetch at all', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+    const guard = getGuard();
+    let pending!: Promise<'saved' | 'discarded' | 'cancelled'>;
+    act(() => {
+      pending = guard.confirmClose('discard');
+    });
+    fireEvent.click(screen.getByTestId('unsaved-modal-cancel'));
+    expect(await pending).toBe('cancelled');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('plain confirmClose() (no variant) followed by "Salir sin guardar" never calls the discard endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor();
+    const guard = getGuard();
+    let pending!: Promise<'saved' | 'discarded' | 'cancelled'>;
+    act(() => {
+      pending = guard.confirmClose();
+    });
+    expect(screen.queryByTestId('unsaved-modal-discard')).toBeNull(); // the plain variant, not the discard one
+    fireEvent.click(screen.getByTestId('unsaved-modal-leave'));
+    expect(await pending).toBe('discarded');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -779,6 +1056,29 @@ describe('ActivityEditorIsland — preview toggle', () => {
     renderEditor({ initialBlocks: [matchBlock] });
     fireEvent.click(screen.getByTestId('preview-toggle'));
     expect(screen.getByTestId('quiz-matching')).toBeTruthy();
+  });
+
+  // T1 ("molded previews show the real board, never Básico"): this list
+  // renders every block's own `QuizLivePreview` directly, with no
+  // `boardHasContent`/`hasQuestions` gate of its own (unlike
+  // `QuizBlockEditor`'s own template stage) — `QuizLivePreview` must guard
+  // itself, so a block with nothing playable yet renders nothing here
+  // rather than falling back to the generic Básico layout.
+  it('renders nothing for a templated quiz block whose board has no playable content yet (a cloze sentence with an unclosed bracket)', () => {
+    const clozeBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'cloze',
+      payload: {
+        pools: {},
+        slots: [{ id: 's1', label: 'She [is', input: 'text', answer: [] }],
+        blocks: [{ kind: 'row', id: 'row-cz-s0-b0-1', slotId: 's1' }],
+      },
+    };
+    renderEditor({ initialBlocks: [clozeBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(screen.queryByTestId('quiz-cloze')).toBeNull();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
   });
 
   it('renders both a worksheet and a quiz block together, in authored order', () => {
@@ -1574,5 +1874,95 @@ describe('ActivityEditorIsland — scoped ScrollToTop wiring, PREVIEW ONLY (owne
     preview.scrollTo = scrollTo;
     fireEvent.click(screen.getByTestId('scroll-to-top-scoped'));
     expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+  });
+
+  // Horizontal toolbar pass: a bottom-docked rail would otherwise sit under
+  // this scoped button while a templated quiz block is active — raised
+  // clear of it the same way the stage's own preview frame is (both read
+  // from the SAME `66px` figure: 12 gap + 42 rail + 12 inset).
+  it('is lifted above the bottom-docked rail while a templated quiz block is active', () => {
+    const matchBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: ['perro'] }] },
+    };
+    renderEditor({ initialBlocks: [matchBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    const classes = screen.getByTestId('scroll-to-top-scoped').className.split(/\s+/);
+    expect(classes).toContain('bottom-[66px]');
+    expect(classes).not.toContain('bottom-4');
+  });
+
+  it('keeps its default bottom-4 for a worksheet block (not a templated quiz block)', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    const classes = screen.getByTestId('scroll-to-top-scoped').className.split(/\s+/);
+    expect(classes).toContain('bottom-4');
+    expect(classes).not.toContain('bottom-[66px]');
+  });
+});
+
+// Horizontal toolbar pass: while a templated quiz block is active, the
+// preview column gains a `container-type: size` context plus a bottom
+// reservation for the now bottom-docked rail, and every `QuizLivePreview` in
+// that column (not only template ones — a Básico block alongside a match
+// block in the same activity, say) gets a container-relative width cap, so
+// the frames and their own "Comprobar" action stay above the bar.
+describe('ActivityEditorIsland — preview column reserves room for the bottom-docked rail (horizontal toolbar pass)', () => {
+  it('gives the preview column the container-size + bottom-reservation classes only while a templated block is active', () => {
+    const matchBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: ['perro'] }] },
+    };
+    renderEditor({ initialBlocks: [matchBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    const column = screen.getByTestId('activity-preview');
+    expect(column.className).toContain('lg:[container-type:size]');
+    expect(column.className).toContain('lg:pb-[66px]');
+  });
+
+  it('omits both classes for a worksheet-only activity (no templated block active)', () => {
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    const column = screen.getByTestId('activity-preview');
+    expect(column.className).not.toContain('lg:[container-type:size]');
+    expect(column.className).not.toContain('lg:pb-[66px]');
+  });
+
+  it('wraps every QuizLivePreview (even a Básico one) with the container-relative width cap while a templated block is active', () => {
+    const matchBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: ['perro'] }] },
+    };
+    const basicBlock: Block = {
+      id: 'q2',
+      type: 'quiz',
+      payload: { pools: {}, slots: [{ id: 's2', label: 'The cat ___', input: 'text', answer: ['sits'] }] },
+    };
+    renderEditor({ initialBlocks: [matchBlock, basicBlock] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    for (const blockId of ['q1', 'q2']) {
+      const cap = screen.getByTestId(`quiz-preview-cap-${blockId}`);
+      expect(cap.className).toContain('mx-auto');
+      expect(cap.className).toContain('w-full');
+      expect(cap.className).toContain('lg:max-w-[calc(100cqh*1240/748)]');
+    }
+  });
+
+  it('does not wrap WorksheetPlayer with the cap, even while a templated block is active', () => {
+    const matchBlock: Block = {
+      id: 'q1',
+      type: 'quiz',
+      template: 'match',
+      payload: { pools: {}, slots: [{ id: 's1', label: 'dog', input: 'text', answer: ['perro'] }] },
+    };
+    renderEditor({ initialBlocks: [matchBlock, WORKSHEET_BLOCK] });
+    fireEvent.click(screen.getByTestId('preview-toggle'));
+    expect(screen.queryByTestId(`quiz-preview-cap-${WORKSHEET_BLOCK.id}`)).toBeNull();
   });
 });

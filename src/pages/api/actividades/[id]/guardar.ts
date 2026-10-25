@@ -259,15 +259,29 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
     }
   }
 
-  const { error: updateActivityError } = await client
+  // `.neq('status', 'removed')` + `.select('id')` (0023 follow-up, the
+  // discard/save race `descartar.ts`'s own header names): the activity could
+  // have been discarded — by the SAME content-less draft's own atomic
+  // `discard_empty_draft` RPC, or the legacy fallback — between this
+  // request's OWN existence check above and this final write; without this
+  // guard, a save still in flight at that instant would silently resurrect
+  // an already-removed activity. Zero affected rows means exactly that race
+  // happened, so this 404s the same way a never-existed/not-owned activity
+  // already does, rather than reporting a false `{ ok: true }`.
+  const { data: updatedRows, error: updateActivityError } = await client
     .from(ACTIVITIES_TABLE)
     .update({ title, level, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('author_id', user.id);
+    .eq('author_id', user.id)
+    .neq('status', 'removed')
+    .select('id');
 
   if (updateActivityError) {
     console.error('[guardar] activity update failed:', updateActivityError.message);
     return jsonResponse({ error: 'save_failed' }, 500);
+  }
+  if (!updatedRows || updatedRows.length === 0) {
+    return notFoundResponse();
   }
 
   return jsonResponse({ ok: true }, 200);

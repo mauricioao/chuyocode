@@ -25,12 +25,21 @@
  * `onSelectSlot`, the exact same wiring `addQuestion` already uses for the
  * Básico list).
  *
- * "Listo para jugar" mirrors `gameModes.ts`'s own `match` rule: at least
- * {@link MIN_MATCH_PAIRS} complete pairs whose answers are all different.
+ * READINESS NEVER CONTRADICTS THE PREVIEW (polish follow-up): the amber
+ * "not ready yet" hint below is driven ENTIRELY by `playable` — the exact
+ * same `boardHasContent('match', …)` call the live preview's own empty
+ * placeholder is gated on (`QuizBlockEditor.tsx`'s own `previewHasContent`)
+ * — never by a local pair count. An "answered" pair only needs a non-empty
+ * ANSWER (a blank question is still a playable pair, same as
+ * `deriveGameItems`'s own "skip only when `answer.length === 0`" rule); once
+ * `playable` is true the ready line always shows, with a separate, calmer
+ * {@link MIN_MATCH_ITEMS}-pair tip underneath while still below that
+ * "more challenging" bar — that tip is advisory ONLY, it never blocks or
+ * hides the ready line itself.
  */
 import { useEffect, useRef } from 'react';
 import { ArrowsLeftRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowsLeftRight';
-import { hasUniqueAnswers } from '@/lib/activities/gameModes';
+import { hasUniqueAnswers, MIN_MATCH_ITEMS } from '@/lib/activities/gameModes';
 import { isMultilinePaste } from '@/lib/activities/pasteLines';
 import { parseMatchPairsPaste, type MatchPastePair } from '@/lib/activities/pasteMatchPairs';
 import {
@@ -57,9 +66,10 @@ const COPY = {
     answerPlaceholder: 'Respuesta',
     removePair: 'Quitar esta pareja',
     addPair: 'Agregar pareja',
-    minPairsHint: 'Agrega al menos 3 parejas',
+    emptyHint: 'Completa al menos una pareja para ver el juego',
     duplicateAnswersHint: 'Cada pareja necesita una respuesta distinta',
-    ready: (n: number) => `Listo para jugar · ${n} parejas`,
+    ready: (n: number) => `Listo para jugar · ${n === 1 ? '1 pareja' : `${n} parejas`}`,
+    tip: 'Con 3 parejas o más, el juego es más retador.',
     pasteHint: 'Puedes pegar una lista: una pareja por línea, separada por = o tab.',
     pasted: (n: number) => `Se ${n === 1 ? 'agregó' : 'agregaron'} ${n === 1 ? '1 pareja' : `${n} parejas`}`,
     exampleQuestion: 'dog',
@@ -74,9 +84,10 @@ const COPY = {
     answerPlaceholder: 'Answer',
     removePair: 'Remove this pair',
     addPair: 'Add pair',
-    minPairsHint: 'Add at least 3 pairs',
+    emptyHint: 'Complete at least one pair to see the game',
     duplicateAnswersHint: 'Each pair needs a different answer',
-    ready: (n: number) => `Ready to play · ${n} pairs`,
+    ready: (n: number) => `Ready to play · ${n === 1 ? '1 pair' : `${n} pairs`}`,
+    tip: 'With 3 or more pairs, the game is more challenging.',
     pasteHint: 'You can paste a list: one pair per line, separated by = or a tab.',
     pasted: (n: number) => `${n} ${n === 1 ? 'pair' : 'pairs'} added`,
     exampleQuestion: 'dog',
@@ -89,9 +100,6 @@ type Copy = (typeof COPY)[keyof typeof COPY];
 function copyFor(lang: string): Copy {
   return lang === 'en' ? COPY.en : COPY.es;
 }
-
-/** `match` needs at least this many complete pairs to be playable — mirrors `gameModes.ts`'s own `MIN_MATCH_ITEMS`. */
-const MIN_MATCH_PAIRS = 3;
 
 /** Question | divider | answer | "×" — shared by the column labels and every row so both columns line up. */
 const PAIR_GRID = 'grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)_2.25rem] items-center';
@@ -107,6 +115,15 @@ export interface MatchPairsEditorProps {
   blockId: string;
   lang: string;
   pairs: MatchPair[];
+  /**
+   * Does the LIVE PREVIEW'S own board actually have something to show right
+   * now (`boardHasContent('match', …)` on the SAME debounced payload the
+   * preview itself reads, `QuizBlockEditor.tsx`'s own `previewHasContent`) —
+   * the single source of truth for this sheet's amber hint (shown only while
+   * `!playable`) and ready line (shown only once `playable`), so the two can
+   * never disagree about whether there is a game to play.
+   */
+  playable: boolean;
   /** The pair whose question field should take focus next (a freshly added row) — `null` for none. */
   focusSlotId?: string | null;
   onQuestionChange: (slotId: string, question: string) => void;
@@ -136,6 +153,7 @@ export default function MatchPairsEditor({
   blockId,
   lang,
   pairs,
+  playable,
   focusSlotId = null,
   onQuestionChange,
   onAnswerChange,
@@ -163,10 +181,15 @@ export default function MatchPairsEditor({
     pendingFocusFieldRef.current = 'question';
   }, [focusSlotId]);
 
-  const complete = pairs.filter((p) => p.question.trim() !== '' && p.answer.trim() !== '');
-  const enoughPairs = complete.length >= MIN_MATCH_PAIRS;
-  const ready =
-    enoughPairs && hasUniqueAnswers(complete.map((p) => ({ id: p.slotId, prompt: p.question, answer: p.answer })));
+  // "Answered" mirrors `deriveGameItems`'s own rule (a pair is skipped only
+  // when its ANSWER is empty — a still-blank question is already a playable
+  // pair), never "both sides filled": that is what keeps this count in sync
+  // with `playable` (`boardHasContent('match', …)`, computed from the exact
+  // same debounced payload one level up).
+  const answered = pairs.filter((p) => p.answer.trim() !== '');
+  const hasDuplicateAnswers =
+    answered.length > 0 &&
+    !hasUniqueAnswers(answered.map((p) => ({ id: p.slotId, prompt: p.question, answer: p.answer })));
 
   // Teaching placeholders + hint (owner spec N5, "teach the format without
   // reading"): shown only while the list has nothing worth looking at yet —
@@ -300,14 +323,17 @@ export default function MatchPairsEditor({
         <StatusNote tone="ready" testId={`match-pairs-paste-feedback-${blockId}`}>
           {feedback.message}
         </StatusNote>
-      ) : ready ? (
+      ) : playable ? (
         <StatusNote tone="ready" testId={`match-pairs-ready-${blockId}`}>
-          {t.ready(complete.length)}
+          {t.ready(answered.length)}
         </StatusNote>
       ) : (
         <StatusNote tone="warn" testId={`match-pairs-hint-${blockId}`}>
-          {enoughPairs ? t.duplicateAnswersHint : t.minPairsHint}
+          {hasDuplicateAnswers ? t.duplicateAnswersHint : t.emptyHint}
         </StatusNote>
+      )}
+      {playable && answered.length < MIN_MATCH_ITEMS && (
+        <Footnote testId={`match-pairs-tip-${blockId}`}>{t.tip}</Footnote>
       )}
       {showPasteHint && <Footnote testId={`match-pairs-paste-hint-${blockId}`}>{t.pasteHint}</Footnote>}
     </div>

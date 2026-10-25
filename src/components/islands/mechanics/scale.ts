@@ -128,11 +128,18 @@ export const STAGE_CONTAINER = '@container';
  * window's own fixed-height body) — so its used height is fully resolved by
  * the flex algorithm before layout ever looks at what is inside it, exactly
  * the condition `container-type: size` needs to avoid collapsing to a
- * zero-height box. `QuizLivePreview`'s own column is NOT one of these: it
- * grows to fit its content (no `flex-1`/bounded ancestor), so it keeps the
- * plain {@link STAGE_CONTAINER} (width only) — giving it this token instead
- * would starve its own height to zero, same failure mode this doc warns
- * against.
+ * zero-height box.
+ *
+ * `QuizLivePreview`'s own column qualifies too (T1 follow-up — this used to
+ * say it did not, back when `ActivityPreviewFrame` did not exist yet):
+ * `ActivityPreviewFrame` renders it at a FIXED 1240x748 design viewport (own
+ * header), inside `ActivityStage`'s own `flex-1 min-h-0` — the exact same
+ * "flex item inside a chain that bottoms out at a fixed-size ancestor" shape
+ * `ActivityPracticeIsland`'s own wrappers rely on, just a fixed PIXEL box
+ * instead of the viewport itself. With no container at all (e.g. a unit
+ * test rendering this column standalone, outside `ActivityPreviewFrame`),
+ * `cqw`/`cqh` fall back to the viewport's own dimensions, per spec, never
+ * to zero — still usable, just not the intended size.
  */
 export const STAGE_CONTAINER_SIZE = '[container-type:size]';
 

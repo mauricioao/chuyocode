@@ -1334,6 +1334,14 @@ h3 {
   box-shadow: 0 0 0 2px var(--color-pop-sky-deep);
 }
 
+/* Desktop only (T3 toolbar-dock pass, "-1/2pt"): phones keep 17px because
+ * iOS Safari zooms into any input under 16px. */
+@media (min-width: 1024px) and (pointer: fine) {
+  .template-field {
+    font-size: 15px;
+  }
+}
+
 /* Chips: white, rounded, hairline — the "+ word" input beside them is the
  * same shape drawn as a dashed outline until it is focused. */
 .template-chip {

@@ -83,6 +83,18 @@ export interface ScrollToTopProps {
    * scroll and floats fixed to the viewport instead.
    */
   targetRef?: RefObject<HTMLElement | null>;
+  /**
+   * Extra classes appended after this button's own (scoped-mode)
+   * `absolute right-4 bottom-4` — horizontal toolbar pass: the activity
+   * editor's own scoped caller raises `bottom-4` to `bottom-[66px]` while a
+   * templated quiz block's own bottom-docked rail would otherwise sit under
+   * it, by passing `className="bottom-[66px]"` here (a later Tailwind class
+   * wins the same-specificity conflict with the base `bottom-4`, same
+   * convention `cn()`'s own callers rely on elsewhere). Global mode ignores
+   * this prop — it has its own computed `style.bottom` instead (see
+   * `bottomOffset`'s own header).
+   */
+  className?: string;
 }
 
 /** How many container/viewport heights of scroll before the button appears. */
@@ -118,7 +130,7 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-export default function ScrollToTop({ labels, targetRef }: ScrollToTopProps) {
+export default function ScrollToTop({ labels, targetRef, className }: ScrollToTopProps) {
   const label = labels.scrollToTop;
   const scoped = Boolean(targetRef);
 
@@ -188,6 +200,7 @@ export default function ScrollToTop({ labels, targetRef }: ScrollToTopProps) {
           ? 'absolute right-4 bottom-4 hidden lg:inline-flex'
           : 'fixed right-4 lg:right-[max(1rem,calc((100vw-72rem)/2+1rem))]',
         shown ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-2 opacity-0',
+        className,
       )}
     >
       <svg

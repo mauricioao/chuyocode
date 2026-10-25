@@ -1158,15 +1158,35 @@ export function initDeskWindowManager(
    * `postMessage` round trip for a value this needs to `await` —
    * `deskWindow.ts`'s own header); a window with nothing to guard (every
    * page except a dirty editor) resolves it `true` immediately.
+   *
+   * `interactive` (T4, "offer to discard"): `{interactive}` tells the
+   * editor's own `canCloseNow` whether THIS window — whichever of the two
+   * callers above triggered this — can actually show/answer a dialog right
+   * now. Derived from this manager's own LIVE `state`, not from which
+   * caller this is: the red light's own `close` message only ever reaches a
+   * visible (non-minimized) window, so `!entry.minimized` is `true` there.
+   * The tray chip's "×" sits inside the chip's own opener anchor, so
+   * `onClickCapture` restores that window an instant before this runs —
+   * it is visible again by now and gets `true` too, which keeps any dialog
+   * answerable instead of opening it inside a hidden, `inert` frame. Only a
+   * window still minimized at this point (none of today's callers) gets
+   * `false`. An entry that is no longer tracked
+   * (should not happen — `managed` was already found above) fails CLOSED
+   * (`false`), same fail-safe posture as `deskWindowCanClose`'s own default.
    */
   async function requestClose(id: string): Promise<void> {
     const managed = frames.get(id);
     if (!managed) return;
+    const entry = state.windows.find((w) => w.id === id);
+    const interactive = entry ? !entry.minimized : false;
     let canClose = true;
     try {
-      const fn = (managed.iframe.contentWindow as unknown as { deskWindowCanClose?: () => Promise<boolean> })
-        ?.deskWindowCanClose;
-      if (fn) canClose = await fn();
+      const fn = (
+        managed.iframe.contentWindow as unknown as {
+          deskWindowCanClose?: (options?: { interactive?: boolean }) => Promise<boolean>;
+        }
+      )?.deskWindowCanClose;
+      if (fn) canClose = await fn({ interactive });
     } catch {
       canClose = true;
     }

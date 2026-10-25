@@ -59,18 +59,35 @@ export function clampToolbarPosition(position: Point, size: ToolbarSize, bounds:
   };
 }
 
+/** Where the toolbar docks against its `bounds` — see {@link dockTargetPosition}. */
+export type DockAnchor = 'right-center' | 'bottom-right';
+
 /**
- * The toolbar's DOCKED position — the right edge (minus {@link DOCK_MARGIN},
- * matching its original `right-3`), vertically centered in `bounds` (matching
- * its original `top-1/2 -translate-y-1/2`). This is both where the ghost
- * dock target renders while undocked, and the pre-computed "docked" position
- * used for arrow-key nudging and the snap-back distance check.
+ * The toolbar's DOCKED position. `x` is always the right edge minus
+ * {@link DOCK_MARGIN} (matching its original `right-3`), for BOTH anchors —
+ * only `y` depends on `anchor`:
+ *  - `'right-center'` (the default, unchanged): vertically centered in
+ *    `bounds` (matching its original `top-1/2 -translate-y-1/2`).
+ *  - `'bottom-right'` (horizontal pass, the toolbar docked along the
+ *    bottom edge of its host surface instead of the right edge): the
+ *    bottom edge minus the same `margin`.
+ *
+ * This is both where the ghost dock target renders while undocked, and the
+ * pre-computed "docked" position used for arrow-key nudging and the
+ * snap-back distance check.
  */
-export function dockTargetPosition(size: ToolbarSize, bounds: Bounds, margin: number = DOCK_MARGIN): Point {
-  return {
-    x: bounds.right - size.width - margin,
-    y: (bounds.top + bounds.bottom) / 2 - size.height / 2,
-  };
+export function dockTargetPosition(
+  size: ToolbarSize,
+  bounds: Bounds,
+  margin: number = DOCK_MARGIN,
+  anchor: DockAnchor = 'right-center',
+): Point {
+  const x = bounds.right - size.width - margin;
+  const y =
+    anchor === 'bottom-right'
+      ? bounds.bottom - size.height - margin
+      : (bounds.top + bounds.bottom) / 2 - size.height / 2;
+  return { x, y };
 }
 
 /** Plain Euclidean distance between two points. */

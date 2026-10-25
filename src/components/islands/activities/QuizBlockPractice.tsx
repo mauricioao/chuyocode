@@ -163,12 +163,20 @@ export default function QuizBlockPractice({
   const gameItems = useMemo(() => deriveGameItems(payload), [payload]);
   const modes = useMemo(
     () =>
-      modesForBlock(availableGameModes(gameItems, payload), block.template).filter((m) => SUPPORTED_MODES.includes(m)),
+      modesForBlock(availableGameModes(gameItems, payload), block.template, gameItems, payload).filter((m) =>
+        SUPPORTED_MODES.includes(m),
+      ),
     [gameItems, payload, block.template],
   );
-  // A mode this block no longer offers (edited down since it was chosen)
-  // falls back to `quiz` rather than rendering nothing.
-  const effectiveMode = modes.includes(mode) ? mode : 'quiz';
+  // A mode this block no longer offers falls back to whatever IS offered
+  // instead, never a hardcoded `'quiz'` (T1, stale-mode fix): a stale
+  // `mode="quiz"` left over from before a templated block's own board had
+  // anything to show must not keep forcing the generic Básico layout once
+  // that board DOES have content — `modes[0]` is always that board's own
+  // game for a templated block (`modesForBlock`'s own ONE-TEMPLATE-ONE-GAME
+  // return is always a single-element list), and `'quiz'` itself for
+  // Básico, matching the previous behaviour there exactly.
+  const effectiveMode = modes.includes(mode) ? mode : modes[0] ?? 'quiz';
 
   if (
     effectiveMode === 'cards' ||

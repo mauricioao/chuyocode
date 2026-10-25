@@ -233,6 +233,21 @@ describe('ScrollToTop — scoped mode (container scroll)', () => {
     fireWindowScroll(0);
   });
 
+  // Horizontal toolbar pass: `ActivityEditorIsland.tsx`'s own scoped caller
+  // raises the resting `bottom-4` to clear a bottom-docked rail by passing
+  // `className="bottom-[66px]"` — the later class must win the conflict
+  // (tailwind-merge via `cn()`), not just get appended alongside it.
+  it('lets a passed className override the scoped mode\'s own bottom-4', () => {
+    const el = makeScrollableDiv();
+    const ref = createRef<HTMLDivElement>();
+    (ref as { current: HTMLDivElement }).current = el;
+
+    render(<ScrollToTop labels={esLabels} targetRef={ref} className="bottom-[66px]" />);
+    const classes = screen.getByTestId('scroll-to-top-scoped').className.split(/\s+/);
+    expect(classes).toContain('bottom-[66px]');
+    expect(classes).not.toContain('bottom-4');
+  });
+
   it('is never suppressed by the footer — there is no footer inside the editor card', () => {
     const el = makeScrollableDiv();
     const ref = createRef<HTMLDivElement>();

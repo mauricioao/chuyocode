@@ -375,8 +375,6 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
     if (settleTimeout.current) clearTimeout(settleTimeout.current);
   }, []);
 
-  if (total === 0) return null;
-
   const tiles = sentences[index] ?? [];
   const tileById = new Map(tiles.map((tile) => [tile.id, tile]));
   const correctSequence = tiles.map((tile) => tile.id);
@@ -392,6 +390,16 @@ export default function QuizReorder({ lang, items, seed, nextHref, guest }: Quiz
   useFlip(trayRef, trayIds.join(','), reducedMotion);
   const sensors = useGameDndSensors();
   useGrabCursor(activeId !== null);
+
+  // Hook-order / crash fix-round (T1, "molded previews show the real
+  // board"): this used to sit ABOVE the three hooks just called — a board
+  // that GAINS its first sentence after starting empty (the live preview,
+  // the whole-activity eye-button preview) called them for the first time
+  // on a LATER render, throwing "Rendered fewer hooks than expected".
+  // Every value above is already null/empty-safe for `total === 0`
+  // (`tiles`/`trayIds` default to `[]`, `isComplete` is explicitly gated on
+  // `tiles.length > 0`), so moving this below costs nothing.
+  if (total === 0) return null;
 
   function itemWord(id: string | number): string | null {
     return tileById.get(String(id))?.word ?? null;

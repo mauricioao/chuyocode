@@ -35,6 +35,16 @@ export interface EditorWindowGuard {
   /** True while there is something genuinely unsaved right now. */
   isDirty(): boolean;
   /**
+   * T4, "offer to discard": true while this is still a `'draft'` activity
+   * that never got any real content (`@lib/activities/draftContent`'s
+   * `hasContent`) — independent of {@link isDirty}, which also flips on a
+   * title edit that does not itself count as content. Optional so every
+   * OTHER window type's guard (none of which register this) simply never
+   * triggers the discard prompt below — `undefined`/absent behaves exactly
+   * like `false`.
+   */
+  isEmptyDraft?(): boolean;
+  /**
    * Silently flush (save) the current document — used by MINIMIZE, which is
    * "put this aside", not "leave": never worth interrupting with a modal.
    * Resolves `true` on a successful save, `false` on a failed one.
@@ -47,8 +57,13 @@ export interface EditorWindowGuard {
    * SAME modal `ActivityEditorIsland` already shows for an in-app
    * navigation; `'saved'`/`'discarded'` both mean "safe to navigate now"
    * (whichever one happened), `'cancelled'` means "stay on this window".
+   *
+   * `variant: 'discard'` (T4) swaps that modal's copy/button order for the
+   * discard proposal (`UnsavedChangesModal`'s own `discard` prop) — passed
+   * ONLY by {@link canCloseNow}'s new empty-draft branch below; every other
+   * caller keeps calling this with no argument, today's exact behavior.
    */
-  confirmClose(): Promise<'saved' | 'discarded' | 'cancelled'>;
+  confirmClose(variant?: 'discard'): Promise<'saved' | 'discarded' | 'cancelled'>;
 }
 
 /**
@@ -95,9 +110,22 @@ export function shouldProceedAfterGuardDecision(decision: 'saved' | 'discarded' 
  * `contentWindow` (same-origin, no `postMessage` round trip needed for a
  * value it needs to `await`) before actually removing the frame. `true`
  * means "safe to close right now".
+ *
+ * `interactive` (T4, "offer to discard"): true only while the window being
+ * asked about is actually VISIBLE/answerable right now — the red light on
+ * the topmost window, never the tray ×'s own minimized (hidden + `inert`)
+ * one, the 8-window cap's eviction candidates, or any other non-interactive
+ * caller (a hidden window can never show/answer a dialog). Checked BEFORE
+ * the unchanged dirty branch below: an empty draft proposes DISCARDING it
+ * instead of the ordinary unsaved-changes modal, regardless of `isDirty()`
+ * (a title-only edit, which does not itself count as content, may still
+ * leave `isDirty()` true).
  */
-async function canCloseNow(win: Window): Promise<boolean> {
+async function canCloseNow(win: Window, interactive: boolean): Promise<boolean> {
   const guard = getEditorWindowGuard(win);
+  if (guard && interactive && guard.isEmptyDraft?.()) {
+    return shouldProceedAfterGuardDecision(await guard.confirmClose('discard'));
+  }
   if (guard && guard.isDirty()) {
     const decision = await guard.confirmClose();
     return shouldProceedAfterGuardDecision(decision);
@@ -265,7 +293,13 @@ export function initDeskWindow(
   // nothing else ever calls them) so the HOST can call them directly on
   // `iframe.contentWindow` before honouring a `close`/`minimize` message,
   // same-origin, no `postMessage` round trip needed for a value it awaits.
-  (win as unknown as Record<string, unknown>).deskWindowCanClose = () => canCloseNow(win);
+  // `o?.interactive === true` defaults a missing/no-options call to
+  // `false` — FAIL-SAFE for the empty-draft branch above (never proposes a
+  // discard dialog a caller did not explicitly mark interactive), which is
+  // exactly why the 8-window cap's own direct, no-options call
+  // (`deskWindowManager.ts#openAtCapacity`) needs no change here.
+  (win as unknown as Record<string, unknown>).deskWindowCanClose = (o?: { interactive?: boolean }) =>
+    canCloseNow(win, o?.interactive === true);
   (win as unknown as Record<string, unknown>).deskWindowCanMinimize = () => canMinimizeNow(win);
 
   function prefersReducedMotion(): boolean {
