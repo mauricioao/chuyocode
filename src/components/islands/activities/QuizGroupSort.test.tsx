@@ -427,4 +427,72 @@ describe('QuizGroupSort', () => {
       expect(g2Dot?.className).toContain('bg-pop-yellow');
     });
   });
+
+  // Drag-feel pass (owner complaint: "no se siente que estás agarrando la
+  // pastilla"): `mechanics/gameFeel.tsx`'s own `dragCursorClassName`.
+  describe('grab cursor (drag-feel pass)', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('shows an open-hand cursor on an idle tray tile', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      expect(screen.getByTestId('groupsort-tile-dog').className).toContain('cursor-grab');
+    });
+
+    it('shows no grab cursor once an item is locked correct (it can no longer be picked up)', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      place('dog', 'g1');
+      place('cat', 'g2'); // wrong, so the round does not finish
+      place('bread', 'g2');
+      place('rice', 'g2');
+      fireEvent.click(screen.getByTestId('groupsort-check'));
+
+      expect(screen.getByTestId('groupsort-tile-dog').className).not.toContain('cursor-grab');
+    });
+  });
+
+  // Drag-feel pass, real-browser finding (verified with Playwright, not
+  // reproducible in jsdom; see `QuizMatching.test.tsx`'s own identical
+  // describe block for the full story): an empty group's placeholder used
+  // to be a NATIVE `disabled` button whenever nothing was tap-picked — the
+  // normal state throughout an actual mouse/touch drag. A browser refuses
+  // to dispatch `mousedown`/`mouseup`/`click` to a `disabled` form control
+  // at all, so releasing a real drag squarely on that placeholder never
+  // reached `onDragEnd`.
+  describe('empty group stays droppable by a real drag even with nothing tap-picked (regression)', () => {
+    it('never sets the native disabled attribute from "nothing picked" alone', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const emptyButton = screen.getByTestId('groupsort-group-empty-g1') as HTMLButtonElement;
+      expect(emptyButton.disabled).toBe(false);
+    });
+
+    it('marks it aria-disabled instead, so tap-to-place still reads it as unavailable', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const emptyButton = screen.getByTestId('groupsort-group-empty-g1') as HTMLButtonElement;
+      expect(emptyButton.getAttribute('aria-disabled')).toBe('true');
+
+      fireEvent.click(screen.getByTestId('groupsort-tile-dog'));
+      expect(emptyButton.getAttribute('aria-disabled')).toBeNull();
+    });
+  });
+
+  // MINOR a11y finding (same fix as `MatchSlot`'s own in
+  // `QuizMatching.test.tsx`): `aria-disabled` alone does not drop a button
+  // out of the tab sequence the way the native `disabled` attribute would
+  // have, so the empty placeholder stayed a tab stop even with nothing
+  // picked to place.
+  describe('tab order on an empty group placeholder (MINOR: aria-disabled alone does not remove a tab stop)', () => {
+    it('is not a tab stop while nothing is picked', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const emptyButton = screen.getByTestId('groupsort-group-empty-g1') as HTMLButtonElement;
+      expect(emptyButton.tabIndex).toBe(-1);
+    });
+
+    it('becomes a normal tab stop the instant a tile is picked, matching aria-disabled', () => {
+      render(<QuizGroupSort lang="es" payload={payload} seed="block-1" />);
+      const emptyButton = screen.getByTestId('groupsort-group-empty-g1') as HTMLButtonElement;
+      fireEvent.click(screen.getByTestId('groupsort-tile-dog'));
+      expect(emptyButton.tabIndex).toBe(0);
+    });
+  });
 });

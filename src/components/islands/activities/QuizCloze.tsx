@@ -36,8 +36,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
-  DragOverlay,
-  closestCenter,
   useDraggable,
   useDroppable,
   type Announcements,
@@ -57,12 +55,16 @@ import { seedFromString, shuffleWithSeed } from '@/lib/activities/gameModes';
 import { useGameSound } from '@/lib/activities/gameSounds';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import {
+  GameDragOverlay,
   GameSoundToggle,
+  dragCursorClassName,
+  gameCollisionDetection,
   gameDropAnimation,
   gameTileTransitionClassName,
   liftedTileClassName,
   useFlip,
   useGameDndSensors,
+  useGrabCursor,
 } from '@/components/islands/mechanics/gameFeel';
 import { ACTIVITY_SHEET_CLASS, BLANK_EMPTY, BLANK_FILLED, CHIP_PLACED, CHIP_STAGE } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
@@ -161,6 +163,7 @@ function ClozeTileButton({ id, label, disabled, dragging, picked, reducedMotion,
         // same shared `CHIP_SHAPE` `disabled:opacity-50`, same fix, so a
         // graded chip here keeps its full tray colour too.
         'touch-none disabled:opacity-100',
+        dragCursorClassName(true, dragging),
         dragging && 'opacity-40',
         picked && !dragging && cn(CHIP_PLACED, 'ring-2 ring-inset ring-ring'),
         gameTileTransitionClassName(reducedMotion),
@@ -345,6 +348,7 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
 
   useFlip(trayRef, trayIds.join(','), reducedMotion);
   const sensors = useGameDndSensors();
+  useGrabCursor(activeId !== null);
 
   function wordFor(id: string | number): string | null {
     return itemById.get(String(id))?.text ?? null;
@@ -573,7 +577,7 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
       <DndContext
         id={`dnd-cloze-${seed}`}
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={gameCollisionDetection}
         accessibility={{ announcements, screenReaderInstructions }}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -668,11 +672,11 @@ export default function QuizCloze({ lang, payload, seed, nextHref, guest }: Quiz
           </div>
         </div>
 
-        <DragOverlay dropAnimation={gameDropAnimation(reducedMotion)}>
+        <GameDragOverlay dropAnimation={gameDropAnimation(reducedMotion)} activeId={activeId}>
           {activeWord ? (
             <div className={cn(TILE_BASE, 'pointer-events-none', liftedTileClassName(reducedMotion))}>{activeWord}</div>
           ) : null}
-        </DragOverlay>
+        </GameDragOverlay>
       </DndContext>
     </div>
   );

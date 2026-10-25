@@ -81,8 +81,15 @@ describe('QuizMatching', () => {
     fireEvent.click(screen.getByTestId('matching-tile-s1'));
     expect(screen.getByTestId('matching-tile-s1').getAttribute('aria-pressed')).toBe('false');
 
-    // The slot button is disabled with nothing picked.
-    expect((screen.getByTestId('matching-slot-button-s1') as HTMLButtonElement).disabled).toBe(true);
+    // The slot button is marked (and announced) unavailable with nothing
+    // picked — `aria-disabled`, never the NATIVE `disabled` attribute. See
+    // the "drag onto an empty slot" describe block below for why: a real
+    // browser refuses to dispatch `mouseup`/`click` to a `disabled` form
+    // control at all, even one the pointer is released over mid-drag, which
+    // silently dropped every real-mouse/touch drop onto an empty slot.
+    const slotButton = screen.getByTestId('matching-slot-button-s1') as HTMLButtonElement;
+    expect(slotButton.disabled).toBe(false);
+    expect(slotButton.getAttribute('aria-disabled')).toBe('true');
   });
 
   // Tap-replacing an already-filled slot is intentionally out of scope for
@@ -467,6 +474,54 @@ describe('QuizMatching', () => {
     });
   });
 
+  // Drag-feel pass, real-browser finding (verified with Playwright, not
+  // reproducible in jsdom): an empty slot's own tap target used to be a
+  // NATIVE `disabled` button whenever nothing was tap-picked — which is the
+  // normal state throughout an actual mouse/touch DRAG (tap-to-place's own
+  // `pickedId` is never set by a drag). A browser refuses to dispatch
+  // `mousedown`/`mouseup`/`click` to a `disabled` form control at all, so
+  // releasing a REAL drag squarely over an empty slot never reached
+  // `onDragEnd` — the tile silently stayed "stuck" mid-drag. Fixed by never
+  // setting the native `disabled` attribute for the "nothing picked" case;
+  // `handleSlotPlace` already no-ops safely when `pickedId` is null, so a
+  // tap still does nothing, it just no longer blocks a real drop too.
+  describe('empty slot stays droppable by a real drag even with nothing tap-picked (regression)', () => {
+    it('never sets the native disabled attribute from "nothing picked" alone', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const slotButton = screen.getByTestId('matching-slot-button-s1') as HTMLButtonElement;
+      expect(slotButton.disabled).toBe(false);
+    });
+
+    it('marks it aria-disabled instead, so tap-to-place still reads it as unavailable', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const slotButton = screen.getByTestId('matching-slot-button-s1') as HTMLButtonElement;
+      expect(slotButton.getAttribute('aria-disabled')).toBe('true');
+
+      fireEvent.click(screen.getByTestId('matching-tile-s1'));
+      expect(slotButton.getAttribute('aria-disabled')).toBeNull();
+    });
+  });
+
+  // MINOR a11y finding: switching from `disabled` to `aria-disabled` (just
+  // above) fixed the real-drag drop, but left the button a plain, always-
+  // focusable element — `aria-disabled` does not drop an element out of the
+  // tab sequence the way the native attribute would have, so every empty
+  // slot stayed a tab stop even with nothing picked to place.
+  describe('tab order on an empty slot (MINOR: aria-disabled alone does not remove a tab stop)', () => {
+    it('is not a tab stop while nothing is picked', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const slotButton = screen.getByTestId('matching-slot-button-s1') as HTMLButtonElement;
+      expect(slotButton.tabIndex).toBe(-1);
+    });
+
+    it('becomes a normal tab stop the instant a tile is picked, matching aria-disabled', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      const slotButton = screen.getByTestId('matching-slot-button-s1') as HTMLButtonElement;
+      fireEvent.click(screen.getByTestId('matching-tile-s1'));
+      expect(slotButton.tabIndex).toBe(0);
+    });
+  });
+
   describe('layout (visual-polish-2 pass: a 5+ pair board must fit the stage, never overlap its own controls)', () => {
     it('keeps the chrome row (sound toggle + Reiniciar) from ever shrinking, so it cannot be squeezed over the board', () => {
       render(<QuizMatching lang="es" items={items} seed="block-1" />);
@@ -633,6 +688,24 @@ describe('QuizMatching', () => {
       expect(cls).toContain('text-[clamp(1.125rem,');
       expect(cls).toContain('font-semibold');
       expect(cls).toContain('px-[clamp(1.25rem,');
+    });
+  });
+
+  // Drag-feel pass (owner complaint: "no se siente que estás agarrando la
+  // pastilla"): the grab-cursor affordance from `mechanics/gameFeel.tsx`'s
+  // own `dragCursorClassName`, wired into every tile — `useGrabCursor`'s own
+  // document-wide cursor during a real drag is covered by `gameFeel.test.tsx`
+  // directly, since jsdom cannot exercise an actual drag here.
+  describe('grab cursor (drag-feel pass)', () => {
+    it('shows an open-hand cursor on an idle tray tile', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('matching-tile-s1').className).toContain('cursor-grab');
+    });
+
+    it('keeps the grab cursor on a tile once it is placed (it can still be dragged back out)', () => {
+      render(<QuizMatching lang="es" items={items} seed="block-1" />);
+      place('s1', 's1');
+      expect(screen.getByTestId('matching-tile-s1').className).toContain('cursor-grab');
     });
   });
 });

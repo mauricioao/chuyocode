@@ -127,3 +127,56 @@ export function characterPoseFallbackSrc(pose: CharacterPoseKey): string {
 export function characterPoseWidth(pose: CharacterPoseKey): number {
   return CHARACTER_POSES[pose].widths[0];
 }
+
+/**
+ * The 3 poses `GameResult.tsx`'s own `OUTCOME_POSE` ever shows on the
+ * end-of-round screen (`perfect` -> `celebra`, `good` -> `pulgar-arriba`,
+ * `retry` -> `casi`) — see that module's own comment above `OUTCOME_POSE`.
+ * Duplicated here rather than imported FROM there, to avoid a cycle
+ * (`GameResult.tsx` already imports this module, for the srcset helpers
+ * above) — `GameResult.test.tsx` cross-checks this list against the real
+ * `OUTCOME_POSE` export so the two can never silently drift apart.
+ */
+export const GAME_RESULT_OUTCOME_POSES: readonly CharacterPoseKey[] = [
+  'vanina/celebra',
+  'vanina/pulgar-arriba',
+  'vanina/casi',
+];
+
+/** Sentinel for {@link preloadCharacterPoses} — see that function's own header for why it is module-level, not a per-call guard. */
+let gameResultPosesPreloaded = false;
+
+/**
+ * Warms the browser's HTTP cache for every `GameResult` outcome pose the
+ * instant a template activity mounts — long before any round actually ends
+ * (bugfix; owner report "Vanina aparece de golpe"; verified diagnosis: her
+ * pose `<img>` only became paintable ~180ms after `GameResult` itself
+ * mounted on a good connection, much later on a slow one, since nothing had
+ * ever fetched it before then — her CSS entrance played out before she had
+ * anything to paint). Plain `new Image()` instances, never inserted into
+ * the DOM (only the browser's HTTP cache matters here, not a visible
+ * element), each carrying the SAME per-format `srcset` the real `<picture>`
+ * in `GameResult.tsx` builds from `characterPoseSrcSet` — both `avif` and
+ * `webp`, since a bare `Image()` cannot repeat `<picture>`'s own
+ * `<source type>` negotiation; this warms whichever candidate the browser
+ * ends up actually choosing there instead of guessing just one.
+ *
+ * IDEMPOTENT for the page's whole life (a module-level flag, not a
+ * per-call guard): every template mould reaches this same outcome screen
+ * and `QuizBlockPractice` mounts all four of them, so without this flag
+ * switching game modes would re-issue the same 6 requests over and over.
+ *
+ * SSR-safe: `typeof Image === 'undefined'` on the server (Astro SSR) — same
+ * guard shape `GameResult.tsx`'s own `typeof document === 'undefined'` uses.
+ */
+export function preloadCharacterPoses(): void {
+  if (gameResultPosesPreloaded || typeof Image === 'undefined') return;
+  gameResultPosesPreloaded = true;
+  for (const pose of GAME_RESULT_OUTCOME_POSES) {
+    for (const format of ['avif', 'webp'] as const) {
+      const img = new Image();
+      img.srcset = characterPoseSrcSet(pose, format);
+      img.src = characterPoseFallbackSrc(pose);
+    }
+  }
+}

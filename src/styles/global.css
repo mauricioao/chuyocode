@@ -1453,68 +1453,151 @@ h3 {
 /* GameResult — Vanina's "Toasty!"-style pop-in (visual-polish pass, owner
  * spec: "sale desde abajo a la izquierda de la ventana, se ve solo la mitad
  * de la imagen... como el Toasty de Mortal Kombat, pero desde el borde
- * inferior... ella se queda, no vuelve a desaparecer"). `.game-result-
- * vanina` is the RESTING transform — `translateY(50%)` pushes the bottom
- * half of her box past `GameResult.tsx`'s own `overflow-hidden` root, so
- * only the upper half ever paints; this rule applies unconditionally, so
- * under reduced motion that is simply where she sits, with no entrance to
- * play at all. `transform-origin: bottom` keeps the pop's own scale
- * growing up and out of the edge, never off-centre. The `from`-only
- * keyframe (same idiom as `.template-enter` above) animates FROM fully
- * hidden below the edge, scaled down a touch, TO this exact resting
- * transform — easeOutBack's own slight overshoot is the "pop". */
+ * inferior... ella se queda, no vuelve a desaparecer"). `transform-origin:
+ * bottom` keeps the pop's own scale growing up and out of the edge, never
+ * off-centre.
+ *
+ * GATED ON REAL DECODE (bugfix, owner report: "aparece de golpe" — she
+ * appeared abruptly; verified diagnosis: this used to animate
+ * unconditionally on mount, but the pose `<img>` only became paintable
+ * ~180ms later on a good connection — far later on a slow one — so the old
+ * entrance had already finished playing before there was anything to
+ * actually see rise). This base rule is now the PRE-ANIMATION resting
+ * state — invisible, below the window's own bottom edge, the same values
+ * the entrance keyframe's own `from` step uses below — and stays that way
+ * unconditionally until `GameResult.tsx` sets `data-ready="true"` on this
+ * SAME element (the `<img>` itself reported `complete`, its own
+ * `img.decode()` settled either way, or a fixed fallback elapsed). */
 .game-result-vanina {
-  transform: translateY(50%);
+  opacity: 0;
+  transform: translateY(160%) scale(0.85);
   transform-origin: bottom;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .game-result-vanina {
-    animation: game-result-vanina-pop 650ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  .game-result-vanina[data-ready='true'] {
+    animation: game-result-vanina-pop 700ms
+      linear(0, 0.3 10%, 0.7 20%, 0.94 32%, 1.08 45%, 1.1 52%, 1.04 68%, 1.01 82%, 1 100%) forwards;
+  }
+}
+
+/* Browsers without `linear()` easing support (anything older than Chrome
+ * 113/Firefox 112/Safari 16.4) treat the WHOLE `animation` shorthand above
+ * as invalid — one unrecognized function invalidates the entire
+ * declaration — and drop it outright, leaving Vanina stuck at the
+ * pre-animation state forever. This restates the complete shorthand with
+ * the plain overshoot curve the animation always used before this pass,
+ * rather than trying to patch just the easing. */
+@supports not (animation-timing-function: linear(0, 1)) {
+  @media (prefers-reduced-motion: no-preference) {
+    .game-result-vanina[data-ready='true'] {
+      animation: game-result-vanina-pop 700ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
   }
 }
 
 @keyframes game-result-vanina-pop {
   from {
+    opacity: 0;
     transform: translateY(160%) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(50%) scale(1);
   }
 }
 
-/* GameResult's one-shot confetti burst (`perfect`/`good` outcomes only,
+/* Reduced motion — gentle, not nothing (the owner may have OS animations
+ * off entirely: Windows' "Animation effects: off"). No slide, but still a
+ * real reveal once ready: a plain opacity fade, snapped straight to the
+ * resting crop rather than playing the full rise. */
+@media (prefers-reduced-motion: reduce) {
+  .game-result-vanina {
+    transform: translateY(50%);
+    transition: opacity 250ms var(--ease-control);
+  }
+  .game-result-vanina[data-ready='true'] {
+    opacity: 1;
+  }
+}
+
+/* GameResult's confetti burst (`perfect`/`good` outcomes only,
  * `GameResult.tsx`'s own `CONFETTI_OUTCOMES`) — small pieces shooting from
- * the result area's own left/right edges, timed to land as Vanina pops up
- * above. Deterministic per-piece `--confetti-*` custom properties, set
- * inline by the component (index-based — never `Math.random()` at render,
- * same "custom property per instance, one shared keyframe" posture
- * `deskWindowManager.ts`'s own `--desk-window-manager-from` already uses).
- * The base rule's `opacity: 0` only ever shows under reduced motion (the
- * animation's own `both` fill otherwise keeps every piece visible from the
- * very start of its delay) — paired with hiding the whole layer outright
- * below, so reduced motion never shows a static, non-animating dot.
+ * the result area's own left/right edges. TWO PHASES (owner spec: "una
+ * animacion curva en el tiempo simulando la explosion inicial de tirar
+ * chispas, y luego la caida lenta de los papelitos"): phase 1
+ * ("explosion", 0%-12% of the timeline) is a fast, overshooting launch up
+ * and inward; phase 2 (12%-100%) is a slow gravity-like fall, with a sway
+ * waypoint at 60% and a fade only in its last stretch (88%-100%) — never a
+ * flat fade across the whole piece, which would read as dissolving rather
+ * than properly landing. Each piece is an OUTER element (this macro
+ * motion) wrapping an INNER one (continuous paper-flutter, below) — two
+ * independent `transform`s, so the big launch/fall arc never fights the
+ * inner element's own continuous tumble.
  *
- * `container-type: size` turns THIS layer (not each 8px piece) into the
- * reference box for the `cqw`/`cqh` units `--confetti-dx`/`--confetti-dy`
- * use below — bugfix: `translate()`'s percentages resolve against the
- * translated element's OWN box, so a `%` travel on an 8px piece only ever
- * moved it a few px and the whole burst read as two static edge columns.
- * The layer is already `inset-0` on a `position: relative` ancestor, so it
- * has a definite size to contain on. */
+ * GATED ON THE SAME `data-ready` AS VANINA (owner spec: the burst must
+ * land as she pops up) — `GameResult.tsx` sets `data-ready="true"` on THIS
+ * layer the instant it does on her own `<picture>` (same `poseReady`
+ * state), so a slow connection delays the burst exactly as long as it
+ * delays her entrance, never sooner.
+ *
+ * Deterministic per-piece `--confetti-*` custom properties, set inline by
+ * the component (index-based — never `Math.random()` at render, same
+ * "custom property per instance, one shared keyframe" posture
+ * `deskWindowManager.ts`'s own `--desk-window-manager-from` already uses).
+ * `--confetti-dx`/`--confetti-dy` are the burst's own PEAK displacement
+ * (unchanged from the single-phase version this replaces); `--confetti-
+ * sway-dx`/`-sway-dy` and `--confetti-fall-dx`/`-fall-dy` are the two new
+ * waypoints the slow-fall phase adds. All in `cqw`/`cqh` —
+ * `container-type: size` below is what makes those container-relative
+ * units resolve against the WHOLE result area rather than each 8px
+ * piece's own tiny box (a `%` travel on an 8px piece would only ever move
+ * it a few px — the bug the original single-phase burst had). */
 .game-result-confetti {
   container-type: size;
 }
 
 .game-result-confetti-piece {
   position: absolute;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
   opacity: 0;
 }
 
+/* The actual coloured paper square — `background-color: inherit` picks up
+ * the OUTER span's own inline per-piece colour (`confettiPieceStyle`,
+ * `GameResult.tsx`), kept on the outer element so a future caller can still
+ * read/override it there. Split from the outer element precisely so this
+ * one can carry its OWN continuous flutter `transform` (below) without
+ * fighting the outer's big launch/fall/sway `transform`. */
+.game-result-confetti-piece-inner {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background-color: inherit;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .game-result-confetti-piece {
-    animation: game-result-confetti-piece var(--confetti-duration, 1700ms) var(--confetti-delay, 300ms)
-      cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  .game-result-confetti[data-ready='true'] .game-result-confetti-piece {
+    animation: game-result-confetti-piece var(--confetti-duration, 3200ms) var(--confetti-delay, 300ms)
+      cubic-bezier(0.45, 0, 0.55, 1) both;
+  }
+
+  /* Paper-flutter (owner spec: "papel atrapando aire") — a rotate +
+   * rotateX/scaleX tumble, independent of the outer piece's own one-shot
+   * burst/fall above. BOUNDED to a finite `8` iterations, never `infinite`
+   * (MAJOR bugfix): up to `CONFETTI_PIECES_PER_SIDE * 2` (40) of these kept
+   * tumbling forever, long after the outer piece faded out and froze at
+   * `opacity: 0` (the `both` fill-mode above), burning CPU/GPU on an
+   * invisible result screen indefinitely. `8` iterations of the longest
+   * `--confetti-flutter-duration` (650ms) plus its own longest
+   * `--confetti-flutter-delay` (299ms) — both `confettiPieceStyle`,
+   * `GameResult.tsx` — total ~5.5s, comfortably past the longest possible
+   * OUTER piece lifetime (`--confetti-delay` + `--confetti-duration`,
+   * ~4.2s worst case, same file), so the flutter never visibly stops while
+   * its piece is still on screen, yet it always stops. */
+  .game-result-confetti[data-ready='true'] .game-result-confetti-piece-inner {
+    animation: game-result-confetti-flutter var(--confetti-flutter-duration, 600ms)
+      var(--confetti-flutter-delay, 0ms) ease-in-out 8 alternate;
   }
 }
 
@@ -1522,22 +1605,60 @@ h3 {
   0% {
     opacity: 1;
     transform: translate(0, 0) rotate(0deg);
+    animation-timing-function: cubic-bezier(0.17, 0.89, 0.32, 1.25); /* phase 1: explosive overshoot */
   }
-  70% {
+  12% {
+    /* phase 2 (12% -> 100%) falls back to the gravity ease-in set on the
+     * `animation` shorthand above — no further override needed at this or
+     * later stops. */
+    transform: translate(var(--confetti-dx, 0), var(--confetti-dy, -40cqh)) rotate(0deg);
+  }
+  60% {
+    transform: translate(var(--confetti-sway-dx, 0), var(--confetti-sway-dy, 15cqh))
+      rotate(var(--confetti-rotate, 180deg));
+  }
+  88% {
     opacity: 1;
   }
   100% {
     opacity: 0;
-    transform: translate(var(--confetti-dx, 0), var(--confetti-dy, -60cqh)) rotate(var(--confetti-rotate, 180deg));
+    transform: translate(var(--confetti-fall-dx, 0), var(--confetti-fall-dy, 70cqh))
+      rotate(var(--confetti-rotate, 180deg));
   }
 }
 
-/* Under reduced motion: Vanina simply rests in place (above), no confetti
- * at all — a static, non-animating dot would read as visual noise, not an
- * entrance cue. */
+@keyframes game-result-confetti-flutter {
+  from {
+    transform: rotate(0deg) rotateX(0deg) scaleX(1);
+  }
+  to {
+    transform: rotate(35deg) rotateX(180deg) scaleX(0.35);
+  }
+}
+
+/* Reduced motion — gentle, not nothing (bugfix; owner report: "las chispas
+ * no aparecen para nada" — with Windows' "Animation effects: off" the old
+ * blanket `display: none` on the WHOLE layer meant literally nothing
+ * showed). A small subset — 8 of the 40 pieces, evenly spread across both
+ * sides via `:nth-child(5n + 1)` — fades in and drifts down a short, fixed
+ * distance once `data-ready`: opacity and `translateY` only, never
+ * rotation or the burst/sway/fall waypoints above. Each piece's own
+ * `--confetti-delay` still staggers the fade-in, so even this fallback
+ * reads as a loose cascade rather than every piece appearing at once. */
 @media (prefers-reduced-motion: reduce) {
-  .game-result-confetti {
+  .game-result-confetti-piece {
     display: none;
+  }
+  .game-result-confetti-piece:nth-child(5n + 1) {
+    display: block;
+    opacity: 0;
+    transform: translateY(-10cqh);
+    transition: opacity 1800ms var(--ease-control), transform 1800ms var(--ease-control);
+    transition-delay: var(--confetti-delay, 0ms);
+  }
+  .game-result-confetti[data-ready='true'] .game-result-confetti-piece:nth-child(5n + 1) {
+    opacity: 1;
+    transform: translateY(12cqh);
   }
 }
 

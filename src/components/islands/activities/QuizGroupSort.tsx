@@ -29,8 +29,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
-  DragOverlay,
-  closestCenter,
   useDraggable,
   useDroppable,
   type Announcements,
@@ -46,12 +44,16 @@ import { deriveGroupSortGroups, groupSortPoolName, seedFromString, shuffleWithSe
 import { useGameSound } from '@/lib/activities/gameSounds';
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion';
 import {
+  GameDragOverlay,
   GameSoundToggle,
+  dragCursorClassName,
+  gameCollisionDetection,
   gameDropAnimation,
   gameTileTransitionClassName,
   liftedTileClassName,
   useFlip,
   useGameDndSensors,
+  useGrabCursor,
 } from '@/components/islands/mechanics/gameFeel';
 import { ACTIVITY_SHEET_CLASS, stageChipColorClass } from '@/components/islands/mechanics/chip';
 import { GradeMark, gradeAriaSuffix, gradeSummary, type GradeState } from '@/components/islands/mechanics/CheckMark';
@@ -211,6 +213,7 @@ function ItemTile({ id, label, disabled, draggable, dragging, picked, locked, wr
         // graded chip here keeps its full tray colour too.
         'disabled:opacity-100',
         draggable && 'touch-none',
+        dragCursorClassName(draggable, dragging),
         dragging && 'opacity-40',
         // Picked (tap-selected, not yet placed): a ring only — never a
         // white `CHIP_PLACED` fill, which would hide the chip's own colour.
@@ -304,7 +307,22 @@ function GroupBox({
             data-testid={`groupsort-group-empty-${groupId}`}
             aria-label={emptyLabel}
             onClick={onPlacePicked}
-            disabled={disabled || !canPlacePicked}
+            // Drag-feel pass, real-browser finding (see `MatchSlot`'s own
+            // identical fix in `QuizMatching.tsx` for the full story): NEVER
+            // the native `disabled` attribute for "nothing picked" — a
+            // browser refuses to dispatch `mousedown`/`mouseup`/`click` to a
+            // `disabled` form control at all, which silently swallowed a
+            // real mouse/touch drag released on an EMPTY group (the normal
+            // case — `pickedId` is tap-to-place's own state, never set by a
+            // drag). `aria-disabled` keeps the same "unavailable" signal for
+            // assistive tech; `onPlacePicked` above already no-ops when
+            // nothing is picked, so a tap here still safely does nothing.
+            disabled={disabled}
+            aria-disabled={!canPlacePicked || undefined}
+            // Tab order (MINOR a11y finding, same fix as `MatchSlot`'s own
+            // in `QuizMatching.tsx`): `aria-disabled` alone does not drop a
+            // button out of the tab sequence the way `disabled` would have.
+            tabIndex={canPlacePicked ? 0 : -1}
             className="flex min-h-11 w-full flex-1 items-center justify-center bg-transparent p-0 text-sm text-muted-foreground"
           >
             {emptyLabel}
@@ -445,6 +463,7 @@ export default function QuizGroupSort({ lang, payload, seed, nextHref, guest }: 
   const trayIds = trayOrder.filter((id) => !placements[id] && !lockedIds.has(id));
   useFlip(trayRef, trayIds.join(','), reducedMotion);
   const sensors = useGameDndSensors();
+  useGrabCursor(activeId !== null);
   const locked = phase === 'done';
 
   function itemLabel(id: string | number): string | null {
@@ -660,7 +679,7 @@ export default function QuizGroupSort({ lang, payload, seed, nextHref, guest }: 
       <DndContext
         id={`dnd-groupsort-${seed}`}
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={gameCollisionDetection}
         accessibility={{ announcements, screenReaderInstructions }}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -762,7 +781,7 @@ export default function QuizGroupSort({ lang, payload, seed, nextHref, guest }: 
           </div>
         </div>
 
-        <DragOverlay dropAnimation={gameDropAnimation(reducedMotion)}>
+        <GameDragOverlay dropAnimation={gameDropAnimation(reducedMotion)} activeId={activeId}>
           {activeLabel && activeId ? (
             <div
               className={cn(
@@ -774,7 +793,7 @@ export default function QuizGroupSort({ lang, payload, seed, nextHref, guest }: 
               {activeLabel}
             </div>
           ) : null}
-        </DragOverlay>
+        </GameDragOverlay>
       </DndContext>
     </div>
   );

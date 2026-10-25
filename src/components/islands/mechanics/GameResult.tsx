@@ -50,7 +50,7 @@
  * guest "Crear cuenta" link below keeps its own explicit `text-accent-ink`
  * since it is a plain `<a>`, not a `Button`.
  */
-import { useContext, type CSSProperties } from 'react';
+import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -157,11 +157,21 @@ function outcomeFor(correct: number, total: number): GameResultOutcome {
  * the text). `perfect` -> `celebra`; `good` ("¡Muy bien!") -> `pulgar-
  * arriba`; `retry` ("¡Casi! Sigue practicando") -> `casi`.
  */
-const OUTCOME_POSE: Record<GameResultOutcome, CharacterPoseKey> = {
+export const OUTCOME_POSE: Record<GameResultOutcome, CharacterPoseKey> = {
   perfect: 'vanina/celebra',
   good: 'vanina/pulgar-arriba',
   retry: 'vanina/casi',
 };
+
+/**
+ * Safety net for {@link GameResult}'s own decode-gating effect — if
+ * `img.decode()` never settles at all (a stalled connection, never actually
+ * erroring either), Vanina's entrance and the confetti burst would
+ * otherwise wait forever. A fixed delay comfortably past a cold `<picture>`
+ * fetch+decode on a throttled connection, but far short of making the
+ * owner's "abrupt pop" complaint come back.
+ */
+const VANINA_READY_FALLBACK_MS = 1200;
 
 /**
  * Confetti burst (visual-polish pass, owner spec: "confetti que sale de los
@@ -191,9 +201,10 @@ const CONFETTI_COLOR_VARS = [
  * Deterministic per-piece params, pure arithmetic over `index` — never
  * `Math.random()` at render, which would mismatch between the server- and
  * client-rendered markup and break hydration. Expressed as `--confetti-*`
- * custom properties the shared `.game-result-confetti-piece` keyframe reads
- * (same "set a custom property per instance, one shared keyframe" posture
- * `deskWindowManager.ts`'s own `--desk-window-manager-from` already uses).
+ * custom properties the shared `.game-result-confetti-piece`/`-flutter`
+ * keyframes read (same "set a custom property per instance, one shared
+ * keyframe" posture `deskWindowManager.ts`'s own
+ * `--desk-window-manager-from` already uses).
  *
  * BUGFIX: `--confetti-dx`/`--confetti-dy` used to be plain `%`, but
  * `translate()`'s percentages resolve against the TRANSLATED element's own
@@ -205,18 +216,32 @@ const CONFETTI_COLOR_VARS = [
  * fraction of the stage. `seed` (side-offset index) keeps every number
  * still pure arithmetic over `index`, just no longer mirrored left/right at
  * the same height/size/timing, which used to read as a grid.
+ *
+ * TWO PHASES (owner spec: "una animacion curva en el tiempo simulando la
+ * explosion inicial... y luego la caida lenta de los papelitos"):
+ * `--confetti-dx`/`-dy` stay the explosion's own PEAK displacement
+ * (unchanged meaning/range from the single-phase version this replaces —
+ * every existing test keeps asserting on these two); `--confetti-sway-*`
+ * is a mid-fall waypoint (a little less inward than the peak, nudged
+ * sideways) and `--confetti-fall-*` is where the piece finally fades out,
+ * well past the peak — both read by `.game-result-confetti-piece`'s own
+ * keyframe in `global.css`.
  */
 function confettiPieceStyle(index: number, side: 'left' | 'right'): CSSProperties {
   const seed = side === 'left' ? index : index + 37;
-  const travel = 15 + ((seed * 17) % 26); // 15-40% of the stage width, inward (owner spec).
-  const rise = 20 + ((seed * 23) % 41); // 20-60% of the stage height, upward (owner spec).
+  const travel = 15 + ((seed * 17) % 26); // burst peak: 15-40% of the stage width, inward (owner spec).
+  const rise = 20 + ((seed * 23) % 41); // burst peak: 20-60% of the stage height, upward (owner spec).
   const rotate = (index % 2 === 0 ? 1 : -1) * (140 + ((seed * 59) % 260));
-  const duration = 1500 + ((seed * 29) % 500); // 1.5-2s (owner spec).
+  const duration = 2920 + ((seed * 29) % 680); // ~2.9-3.6s total — burst (12%) lands ~350-430ms, fall (88%) ~2.6-3.2s (owner spec).
   // Slight delay so the burst lands as Vanina pops up (owner spec), staggered per piece.
   const delay = 220 + ((seed * 47) % (CONFETTI_PIECES_PER_SIDE * 18));
   const bottom = 6 + ((seed * 13) % 46); // spread vertically — not a neat column.
   const edgeOffset = 1 + ((seed * 7) % 6); // 1-6% from the edge — not a dead-straight line either.
   const dx = side === 'left' ? travel : -travel;
+  const sway = (index % 2 === 0 ? 1 : -1) * (6 + ((seed * 11) % 10)); // horizontal sway while falling, alternating direction.
+  const swayDx = Math.round(dx * 0.55) + sway;
+  const fallDx = Math.round(dx * 0.25); // drifts back toward centre, far less than the burst did.
+  const fallDrop = rise + 35 + ((seed * 7) % 25); // falls well past the burst's own peak height.
   const colorVar = CONFETTI_COLOR_VARS[seed % CONFETTI_COLOR_VARS.length];
   return {
     [side]: `${edgeOffset}%`,
@@ -224,9 +249,15 @@ function confettiPieceStyle(index: number, side: 'left' | 'right'): CSSPropertie
     backgroundColor: `var(${colorVar})`,
     '--confetti-dx': `${dx}cqw`,
     '--confetti-dy': `-${rise}cqh`,
+    '--confetti-sway-dx': `${swayDx}cqw`,
+    '--confetti-sway-dy': `${Math.round(rise * 0.3)}cqh`,
+    '--confetti-fall-dx': `${fallDx}cqw`,
+    '--confetti-fall-dy': `${fallDrop}cqh`,
     '--confetti-rotate': `${rotate}deg`,
     '--confetti-duration': `${duration}ms`,
     '--confetti-delay': `${delay}ms`,
+    '--confetti-flutter-duration': `${550 + (seed % 3) * 50}ms`, // paper-flutter: ~550-650ms (owner spec "~500-700ms").
+    '--confetti-flutter-delay': `${(seed * 13) % 300}ms`,
   } as CSSProperties;
 }
 
@@ -277,6 +308,54 @@ export default function GameResult({
   const confettiPieces = showConfetti ? buildConfettiPieces() : [];
   const isPortalPlacement = characterPlacement === 'portal';
 
+  // Gates BOTH Vanina's entrance and the confetti burst on the pose `<img>`
+  // actually being paintable (bugfix; owner report: "aparece de golpe" —
+  // she used to pop in on mount regardless, but the image itself often
+  // wasn't paintable yet, so the entrance had already finished playing
+  // before there was anything to see rise — verified on a throttled
+  // connection). `data-ready="true"` is the CSS hook (`.game-result-vanina`/
+  // `.game-result-confetti` in `global.css`); `imgRef` lets this effect ask
+  // the actual `<img>` DOM node whether it is ready, the same way
+  // `WorksheetZoneEditor.tsx`'s own canvas image fade does.
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [poseReady, setPoseReady] = useState(false);
+
+  useEffect(() => {
+    setPoseReady(false);
+    const img = imgRef.current;
+    if (!img) return undefined;
+    let settled = false;
+    const markReady = () => {
+      if (!settled) {
+        settled = true;
+        setPoseReady(true);
+      }
+    };
+    if (img.complete) {
+      markReady();
+      return undefined;
+    }
+    // Safety net: if `decode()` never settles at all (a stalled connection,
+    // never actually erroring either), don't wait forever.
+    const fallbackTimer = window.setTimeout(markReady, VANINA_READY_FALLBACK_MS);
+    const settleAndClearFallback = () => {
+      window.clearTimeout(fallbackTimer);
+      markReady();
+    };
+    if (typeof img.decode === 'function') {
+      img.decode().then(settleAndClearFallback).catch(settleAndClearFallback);
+    } else {
+      img.addEventListener('load', settleAndClearFallback);
+      img.addEventListener('error', settleAndClearFallback);
+    }
+    return () => {
+      settled = true;
+      window.clearTimeout(fallbackTimer);
+      img.removeEventListener('load', settleAndClearFallback);
+      img.removeEventListener('error', settleAndClearFallback);
+    };
+  }, [pose]);
+
   // Confetti burst + Vanina's reaction figure — see `buildConfettiPieces`/
   // `CONFETTI_OUTCOMES`'s own header above and `.game-result-confetti-
   // piece`'s keyframe in `global.css`. Built ONCE and rendered either
@@ -292,9 +371,16 @@ export default function GameResult({
           both sides), `aria-hidden` + `pointer-events-none`: purely
           decorative, never reachable/blocking. */}
       {showConfetti && (
-        <div data-testid="game-result-confetti" aria-hidden="true" className="game-result-confetti pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          data-testid="game-result-confetti"
+          data-ready={poseReady ? 'true' : undefined}
+          aria-hidden="true"
+          className="game-result-confetti pointer-events-none absolute inset-0 overflow-hidden"
+        >
           {confettiPieces.map((piece) => (
-            <span key={piece.id} className="game-result-confetti-piece" style={piece.style} />
+            <span key={piece.id} className="game-result-confetti-piece" style={piece.style}>
+              <span className="game-result-confetti-piece-inner" />
+            </span>
           ))}
         </div>
       )}
@@ -321,11 +407,13 @@ export default function GameResult({
       <picture
         data-testid="game-result-icon"
         data-outcome-pose={pose}
+        data-ready={poseReady ? 'true' : undefined}
         className="game-result-vanina pointer-events-none absolute bottom-0 left-4 z-10 block h-64 w-auto sm:left-6 md:h-80 lg:h-[28rem] max-[400px]:h-52"
       >
         <source type="image/avif" srcSet={characterPoseSrcSet(pose, 'avif')} />
         <source type="image/webp" srcSet={characterPoseSrcSet(pose, 'webp')} />
         <img
+          ref={imgRef}
           src={characterPoseFallbackSrc(pose)}
           alt=""
           aria-hidden="true"

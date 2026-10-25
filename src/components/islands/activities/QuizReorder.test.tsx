@@ -297,4 +297,22 @@ describe('QuizReorder', () => {
       expect(line).toContain('mx-auto');
     });
   });
+
+  // Drag-feel pass (owner complaint: "no se siente que estás agarrando la
+  // pastilla"): `mechanics/gameFeel.tsx`'s own `dragCursorClassName`, wired
+  // only onto the tray word (the placed word in the line is tap-only here,
+  // `draggable={false}` — see `WordTileButton`'s own props) — advertising a
+  // grab gesture that does nothing would be worse than no affordance.
+  describe('grab cursor (drag-feel pass)', () => {
+    it('shows an open-hand cursor on a tray word, draggable', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      expect(screen.getByTestId('reorder-tile-0-w1').className).toContain('cursor-grab');
+    });
+
+    it('shows no grab cursor on a placed word (tap-only, never draggable)', () => {
+      render(<QuizReorder lang="es" items={items} seed="block-1" />);
+      fireEvent.click(screen.getByTestId('reorder-tile-0-w1'));
+      expect(line(0).getByTestId('reorder-tile-0-w1').className).not.toContain('cursor-grab');
+    });
+  });
 });

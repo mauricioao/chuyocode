@@ -7,8 +7,9 @@
  * file owns the component's own contract in isolation.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import GameResult from './GameResult';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import GameResult, { OUTCOME_POSE } from './GameResult';
+import { GAME_RESULT_OUTCOME_POSES } from '@/content/characterPoses';
 
 afterEach(cleanup);
 
@@ -585,5 +586,126 @@ describe('GameResult', () => {
         expect(el.className).toContain('min-h-11');
       }
     });
+  });
+});
+
+// Vanina pop-in, gated on real decode (bugfix; owner report: "aparece de
+// golpe" — she appears abruptly; verified diagnosis: her CSS entrance used
+// to start unconditionally on mount, but the pose `<img>` only became
+// paintable ~180ms later on a good connection (much later on a slow one),
+// so the entrance had already finished playing before there was anything
+// to actually see rise). `data-ready="true"` on the SAME `<picture>` is the
+// hook `global.css` keys the entrance (and the confetti burst) off.
+describe('Vanina gated on real decode (data-ready)', () => {
+  it('never carries data-ready on mount — nothing has confirmed the pose is actually paintable yet', () => {
+    render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+    expect(screen.getByTestId('game-result-icon').getAttribute('data-ready')).toBeNull();
+  });
+
+  it('flips data-ready to "true" immediately when the image is already complete (e.g. warmed by preloadCharacterPoses)', async () => {
+    const complete = vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+    try {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      await waitFor(() => expect(screen.getByTestId('game-result-icon').getAttribute('data-ready')).toBe('true'));
+    } finally {
+      complete.mockRestore();
+    }
+  });
+
+  it('flips data-ready to "true" once img.decode() resolves', async () => {
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => Promise.resolve(),
+    });
+    try {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      await waitFor(() => expect(screen.getByTestId('game-result-icon').getAttribute('data-ready')).toBe('true'));
+    } finally {
+      delete (HTMLImageElement.prototype as { decode?: unknown }).decode;
+    }
+  });
+
+  it('still flips data-ready to "true" when img.decode() rejects (catch errors -> still ready)', async () => {
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => Promise.reject(new Error('decode failed')),
+    });
+    try {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      await waitFor(() => expect(screen.getByTestId('game-result-icon').getAttribute('data-ready')).toBe('true'));
+    } finally {
+      delete (HTMLImageElement.prototype as { decode?: unknown }).decode;
+    }
+  });
+
+  it('falls back to ready after a fixed short delay if decode never settles at all (network-stall safety net)', () => {
+    vi.useFakeTimers();
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: () => new Promise<void>(() => {}),
+    });
+    try {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      const icon = screen.getByTestId('game-result-icon');
+      expect(icon.getAttribute('data-ready')).toBeNull();
+      act(() => {
+        vi.advanceTimersByTime(1500);
+      });
+      expect(icon.getAttribute('data-ready')).toBe('true');
+    } finally {
+      delete (HTMLImageElement.prototype as { decode?: unknown }).decode;
+      vi.useRealTimers();
+    }
+  });
+
+  it('exports OUTCOME_POSE matching characterPoses\' own GAME_RESULT_OUTCOME_POSES list (preload drift guard)', () => {
+    expect(new Set(Object.values(OUTCOME_POSE))).toEqual(new Set(GAME_RESULT_OUTCOME_POSES));
+  });
+});
+
+// Confetti burst, two-phase (owner spec: "deben tener una animacion curva en
+// el tiempo simulando la explosion inicial de tirar chispas, y luego la
+// caida lenta de los 'papelitos'") — timed to start WITH Vanina's own
+// entrance (same data-ready gate), each piece split into an outer (macro
+// motion: burst then fall) and inner (continuous paper-flutter) element.
+describe('confetti burst timed with Vanina + two-phase motion', () => {
+  it('mirrors the same data-ready gate on the confetti layer as on Vanina\'s own picture', () => {
+    render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+    const confetti = screen.getByTestId('game-result-confetti');
+    const icon = screen.getByTestId('game-result-icon');
+    expect(confetti.getAttribute('data-ready')).toBeNull();
+    expect(confetti.getAttribute('data-ready')).toBe(icon.getAttribute('data-ready'));
+  });
+
+  it('flips the confetti layer\'s own data-ready once the pose image is ready, same as Vanina', async () => {
+    const complete = vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+    try {
+      render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+      await waitFor(() => expect(screen.getByTestId('game-result-confetti').getAttribute('data-ready')).toBe('true'));
+    } finally {
+      complete.mockRestore();
+    }
+  });
+
+  it('wraps every piece in an outer (motion) element carrying exactly one inner (paper flutter) child', () => {
+    render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+    const pieces = Array.from(screen.getByTestId('game-result-confetti').children) as HTMLElement[];
+    expect(pieces.length).toBeGreaterThan(0);
+    for (const piece of pieces) {
+      expect(piece.children).toHaveLength(1);
+      expect(piece.children[0]!.className).toContain('game-result-confetti-piece-inner');
+    }
+  });
+
+  it('carries the slow-fall phase as its own cqw/cqh custom properties, distinct from the burst (--confetti-dx/dy)', () => {
+    render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
+    const pieces = Array.from(screen.getByTestId('game-result-confetti').children) as HTMLElement[];
+    expect(pieces.length).toBeGreaterThan(0);
+    for (const piece of pieces) {
+      expect(piece.style.getPropertyValue('--confetti-fall-dx')).toMatch(/^-?\d+(\.\d+)?cqw$/);
+      expect(piece.style.getPropertyValue('--confetti-fall-dy')).toMatch(/^-?\d+(\.\d+)?cqh$/);
+      expect(piece.style.getPropertyValue('--confetti-sway-dx')).toMatch(/^-?\d+(\.\d+)?cqw$/);
+      expect(piece.style.getPropertyValue('--confetti-sway-dy')).toMatch(/^-?\d+(\.\d+)?cqh$/);
+    }
   });
 });

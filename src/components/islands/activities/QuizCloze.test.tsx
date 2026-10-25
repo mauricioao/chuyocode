@@ -353,4 +353,14 @@ describe('QuizCloze', () => {
       expect(screen.getByTestId('activity-sheet').contains(sentence)).toBe(true);
     });
   });
+
+  // Drag-feel pass (owner complaint: "no se siente que estás agarrando la
+  // pastilla"): `mechanics/gameFeel.tsx`'s own `dragCursorClassName`, wired
+  // into every tray tile.
+  describe('grab cursor (drag-feel pass)', () => {
+    it('shows an open-hand cursor on an idle tray tile', () => {
+      render(<QuizCloze lang="es" payload={TWO_SENTENCE_PAYLOAD} seed="block-1" />);
+      expect(screen.getByTestId('cloze-tile-w-sleep').className).toContain('cursor-grab');
+    });
+  });
 });
