@@ -10,7 +10,7 @@ Owner's rule (`ChuyoCode_others/docs/COMO-TRABAJAMOS.md` §4): nothing is "hecho
 The default `node` on PATH is v16, so `pnpm` fails. Before any pnpm command:
 
 ```
-export PATH="/c/Users/mauri/AppData/Roaming/nvm/v22.23.1:$PATH"
+export PATH="/c/Users/mauri/AppData/Roaming/nvm/v22.23.4:$PATH"
 ```
 
 ## The checks

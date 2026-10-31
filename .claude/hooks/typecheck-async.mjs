@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const NODE22_DIR = process.env.CHUYO_NODE_DIR ?? 'C:\\Users\\mauri\\AppData\\Roaming\\nvm\\v22.23.1';
+const NODE22_DIR = process.env.CHUYO_NODE_DIR ?? 'C:\\Users\\mauri\\AppData\\Roaming\\nvm\\v22.23.4';
 const STALE_LOCK_MS = 10 * 60 * 1000;
 
 const input = JSON.parse(await readStdin());
