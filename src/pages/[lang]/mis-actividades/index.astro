@@ -10,6 +10,11 @@
  * first, `removed` excluded) through `MisActividadesIsland`, which owns the
  * one interactive action this page needs (delete, behind a confirm dialog).
  *
+ * `?q=` (own search box): the SAME `SearchFilter` the community catalog uses
+ * (`ingles/actividades/index.astro`'s own header), read exactly the same way
+ * (`rawQuery`/`activeQuery`) and passed straight to `getActivitiesByAuthor`'s
+ * own `q` option — never a second normalizer.
+ *
  * 🔴 SESSION-DEPENDENT, NEVER PUBLICLY CACHEABLE — `markPrivate` runs
  * unconditionally, same reasoning as `crear/index.astro`.
  *
@@ -35,6 +40,7 @@ import DeskHost from '@components/ingles/DeskHost.astro';
 import DeskWindow from '@components/ingles/DeskWindow.astro';
 import DeskWindowManager from '@components/ingles/DeskWindowManager.astro';
 import MisActividadesIsland, { type MisActividadesActivity } from '@components/islands/activities/MisActividadesIsland';
+import SearchFilter from '@components/ui/SearchFilter.astro';
 import { markPrivate } from '@lib/httpCache';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getActivitiesByAuthor } from '@lib/activities/activities';
@@ -67,6 +73,21 @@ if (!user) {
 
 const t = UI_LABELS[lang].activities.myActivities;
 
+// Own search box (`?q=`), read EXACTLY like the community catalog's own
+// `rawQuery`/`activeQuery` (`ingles/actividades/index.astro`): trimmed,
+// `null` when empty — passed straight to `getActivitiesByAuthor` below,
+// never trusted/normalized a second time here.
+const rawQuery = Astro.url.searchParams.get('q');
+const activeQuery = rawQuery && rawQuery.trim().length > 0 ? rawQuery.trim() : null;
+
+// The search form's own `action` — this route's own path, no `ventana`
+// preserved: same as the catalog's own `basePath`, because a form submit
+// from inside the embedded iframe is a navigation OF that frame, so the
+// browser sends `Sec-Fetch-Dest: iframe` on its own (`isEmbeddedWindowRequest`
+// below already reads that header) — `?ventana=1` is only ever needed for
+// the window manager's OWN initial open, never for an in-window submit.
+const basePath = `/${lang}/mis-actividades`;
+
 /**
  * Window-manager architecture (`@lib/deskWindowsState`'s own header): is
  * this request the window's own CONTENT, loaded inside the host's
@@ -86,7 +107,7 @@ const hostMode = !embedded;
 // already follows for its own grid query.
 let activities: MisActividadesActivity[] = [];
 if (!hostMode) {
-  const rawActivities = await getActivitiesByAuthor(user.id);
+  const rawActivities = await getActivitiesByAuthor(user.id, { q: activeQuery });
 
   /**
    * "Compartir" per row (D8), LIVE activities only — built the SAME way the
@@ -153,8 +174,12 @@ if (hostMode) {
       embedded
       slot="overlay"
     >
+      <Fragment slot="actions">
+        <SearchFilter mode="server" action={basePath} value={activeQuery ?? ''} label={t.searchLabel} />
+      </Fragment>
+
       <section class="mx-auto flex w-full max-w-4xl flex-col gap-6 overflow-y-auto px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-        <MisActividadesIsland client:load lang={lang} initialActivities={activities} />
+        <MisActividadesIsland client:load lang={lang} initialActivities={activities} query={activeQuery} />
       </section>
     </DeskWindow>
   )}

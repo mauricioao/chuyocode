@@ -1986,6 +1986,33 @@ html[data-desk-behind] [data-chrome-footer] {
   }
 }
 
+/* Narrow-window search takeover (`DeskWindow.astro`'s own titlebar, owner
+ * report: the community catalog's OPEN search — bar + lens + clear, plus the
+ * filters trigger and the "+" button, all sharing the same actions slot —
+ * overflowed a 370px-wide titlebar below `desk:`, clipping the lens/clear
+ * off-screen entirely; "Mis actividades"' own lone search overflowed the
+ * same way). Below `desk:` there is no room left for a centred title AND a
+ * fully-open search, so once `.chu-search` opens (`.is-open`, or
+ * `:focus-within` for the zero-JS keyboard-only fallback — see
+ * `SearchFilter.astro`'s own header), the title column gives way entirely
+ * and the actions column takes the freed track, so the bar (now allowed to
+ * SHRINK instead of staying a fixed 220px — see that component's own
+ * `.chu-search`/`.chu-search-bar` rules), the lens, the clear ×, and
+ * whatever OTHER actions share the slot stay fully visible, never clipped.
+ * The traffic lights are untouched (own column, never shrinks away). At
+ * `desk:` and up there is already enough room for everything at once, so
+ * the grid/title stay exactly as before regardless of search state. */
+@media (max-width: 1099.98px) {
+  [data-desk-window-titlebar]:has(#desk-window-actions .chu-search.is-open),
+  [data-desk-window-titlebar]:has(#desk-window-actions .chu-search:focus-within) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  [data-desk-window-titlebar]:has(#desk-window-actions .chu-search.is-open) [data-desk-window-title-col],
+  [data-desk-window-titlebar]:has(#desk-window-actions .chu-search:focus-within) [data-desk-window-title-col] {
+    display: none;
+  }
+}
+
 /* Same defensive second line for the desk's own widgets (owner report,
  * "pantalla rota... la distribución"): `@lib/ui/deskDrag`'s `resize`
  * listener clears a widget's inline `position: absolute` placement the

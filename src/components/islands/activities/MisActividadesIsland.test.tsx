@@ -62,6 +62,37 @@ describe('MisActividadesIsland — empty state', () => {
   });
 });
 
+describe('MisActividadesIsland — search (own ?q=)', () => {
+  it('shows the no-results state with the query and a clear-search link, not the create-activity empty state', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[]} query="zzz" />);
+    expect(screen.getByTestId('mis-actividades-no-results')).toBeTruthy();
+    expect(screen.queryByTestId('mis-actividades-empty')).toBeNull();
+    expect(screen.getByTestId('mis-actividades-no-results').textContent).toContain('zzz');
+    const clear = screen.getByText('Limpiar búsqueda');
+    expect(clear.getAttribute('href')).toBe('/es/mis-actividades');
+  });
+
+  it('keeps the usual empty state (with the create CTA) when there is no query', () => {
+    render(<MisActividadesIsland lang="es" initialActivities={[]} query={null} />);
+    expect(screen.getByTestId('mis-actividades-empty')).toBeTruthy();
+    expect(screen.queryByTestId('mis-actividades-no-results')).toBeNull();
+  });
+
+  it('switches to the no-results state after deleting the last row that matched a search', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<MisActividadesIsland lang="es" initialActivities={[DRAFT]} query="borrador" />);
+
+    fireEvent.click(screen.getByTestId(`activity-delete-${DRAFT.id}`));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('delete-dialog-confirm'));
+    });
+
+    expect(screen.getByTestId('mis-actividades-no-results')).toBeTruthy();
+    expect(screen.queryByTestId('mis-actividades-empty')).toBeNull();
+  });
+});
+
 describe('MisActividadesIsland — listing', () => {
   it('renders each activity with its title, status badge, level and block count', () => {
     render(<MisActividadesIsland lang="es" initialActivities={[DRAFT]} />);

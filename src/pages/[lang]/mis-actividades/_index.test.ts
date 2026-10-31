@@ -16,12 +16,15 @@ vi.mock('@lib/env', () => ({
   }),
 }));
 
-const { activitiesResult } = vi.hoisted(() => ({ activitiesResult: { value: [] as unknown[] } }));
+const { activitiesResult, getActivitiesByAuthorMock } = vi.hoisted(() => ({
+  activitiesResult: { value: [] as unknown[] },
+  getActivitiesByAuthorMock: vi.fn(async (..._args: unknown[]) => activitiesResult.value),
+}));
 
 const getActivityCount = vi.fn();
 const getPublishedActivities = vi.fn();
 vi.mock('@lib/activities/activities', () => ({
-  getActivitiesByAuthor: vi.fn(async () => activitiesResult.value),
+  getActivitiesByAuthor: (...args: unknown[]) => getActivitiesByAuthorMock(...args),
   // The desk behind the HOST shell (`loadDeskSceneData`) reads both of these too.
   getActivityCount: (...args: unknown[]) => getActivityCount(...args),
   getPublishedActivities: (...args: unknown[]) => getPublishedActivities(...args),
@@ -57,6 +60,7 @@ async function render(
 
 beforeEach(() => {
   activitiesResult.value = [];
+  getActivitiesByAuthorMock.mockClear();
   getActivityCount.mockReset();
   getPublishedActivities.mockReset();
   getActivityCount.mockResolvedValue(null);
@@ -166,6 +170,52 @@ describe('GET /[lang]/mis-actividades — renders as a window over the desk (N4)
       embedded: false,
     });
     expect(res.headers.get('vary')).toContain('Sec-Fetch-Dest');
+  });
+});
+
+describe('GET /[lang]/mis-actividades — own search box (?q=)', () => {
+  it('passes the trimmed query straight to getActivitiesByAuthor', async () => {
+    await render('https://chuyocode.test/es/mis-actividades?q=%20cancion%20', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(getActivitiesByAuthorMock).toHaveBeenCalledWith('user-1', { q: 'cancion' });
+  });
+
+  it('passes null when q is absent or blank', async () => {
+    await render('https://chuyocode.test/es/mis-actividades', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(getActivitiesByAuthorMock).toHaveBeenCalledWith('user-1', { q: null });
+
+    getActivitiesByAuthorMock.mockClear();
+    await render('https://chuyocode.test/es/mis-actividades?q=%20%20', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    expect(getActivitiesByAuthorMock).toHaveBeenCalledWith('user-1', { q: null });
+  });
+
+  it('renders the SearchFilter prefilled with the current query', async () => {
+    const res = await render('https://chuyocode.test/es/mis-actividades?q=cancion', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('value="cancion"');
+    expect(html).toContain('action="/es/mis-actividades"');
+  });
+
+  it('renders the no-results state when a search matches nothing', async () => {
+    activitiesResult.value = [];
+    const res = await render('https://chuyocode.test/es/mis-actividades?q=zzz', {
+      params: { lang: 'es' },
+      locals: { user: { id: 'user-1' } },
+    });
+    const html = await res.text();
+    expect(html).toContain('data-testid="mis-actividades-no-results"');
+    expect(html).not.toContain('data-testid="mis-actividades-empty"');
   });
 });
 

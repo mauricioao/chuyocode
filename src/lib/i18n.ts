@@ -1238,6 +1238,12 @@ export const UI_LABELS = {
         pageDescription: 'Las actividades creadas: editar, ver o eliminar cada una.',
         empty: 'Todavía no se creó ninguna actividad.',
         createCta: 'Crear actividad',
+        // Own search box (`?q=`) — same magnifier as the community
+        // catalog's own `explore.searchLabel`, duplicated per section (see
+        // that key's own comment) rather than shared across vocabularies.
+        searchLabel: 'Buscar en mis actividades',
+        noResults: (query: string) => `No hay actividades que coincidan con «${query}».`,
+        clearSearch: 'Limpiar búsqueda',
         noLevel: 'Sin nivel',
         blockCountOne: 'bloque',
         blockCountMany: 'bloques',
@@ -2758,6 +2764,9 @@ export const UI_LABELS = {
         pageDescription: 'Activities created so far: edit, view, or delete each one.',
         empty: 'No activities created yet.',
         createCta: 'Create activity',
+        searchLabel: 'Search my activities',
+        noResults: (query: string) => `No activities match "${query}".`,
+        clearSearch: 'Clear search',
         noLevel: 'No level',
         blockCountOne: 'block',
         blockCountMany: 'blocks',
