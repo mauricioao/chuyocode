@@ -8,19 +8,29 @@
  * The track is pure CSS scroll-snap (`overflow-x-auto snap-x` on the track,
  * `snap-start shrink-0` on each card wrapper) — no island, no layout JS. A tiny
  * dependency-free `is:inline` script only wires the arrow buttons to `scrollBy`
- * on the track; scroll itself works without JS. The script is idempotent and
- * carries `data-astro-rerun` so it re-binds after a View Transition swap
- * (design decision #8).
+ * on the track and keeps `data-at-start`/`data-at-end`/`data-overflow` current;
+ * scroll itself works without JS. The script is idempotent and carries
+ * `data-astro-rerun` so it re-binds after a View Transition swap (design
+ * decision #8).
  *
  * Layout (shademanga row pattern):
  *   - Cards start from a LEFT GUTTER aligned with the row title (they are not
  *     flush to the viewport edge).
  *   - The RIGHT edge carries a gradient fade to black so the last visible card
- *     visually cuts off, hinting there is more content past the edge.
- *   - A PROMINENT accent-yellow chevron button on the right is ALWAYS VISIBLE
- *     (the "there's more" affordance) and scrolls the row right on click. A
- *     left chevron mirrors it but stays hover/focus-gated since it is only
- *     useful once the row has already been scrolled.
+ *     visually cuts off, hinting there is more content past the edge — that
+ *     hint stays even though the next arrow itself is no longer always shown.
+ *   - BOTH chevrons are the same hover/focus-gated dark shadcn icon button
+ *     (prev white, next accent-amber for the "there's more" read), overlaid on
+ *     the POSTER IMAGES at the row's extremes, never the whole card (which
+ *     also carries 1-2 caption lines below the poster). They are invisible
+ *     and non-interactive at rest, fade in on row hover/focus-within, and the
+ *     inline script hides whichever one has nothing left to scroll to.
+ *   - Below `sm` (phones) neither arrow renders at all — swipe is the only
+ *     affordance there, matching the track's native touch scrolling.
+ *
+ * `--editorial-card-w` (set on the `.relative` wrapper, read by both the card
+ * width below AND the arrows' `top` calc) is the single source of truth for
+ * the responsive card size, so the two never drift apart.
  *
  * Mixed content: `items` are already-normalized {@link MediaItem}s, so a single
  * row can carry books AND news (spec: Mixed-type editorial row) — the row is
@@ -36,6 +46,7 @@ import {
   ARROW_BUTTON_VARIANT,
   chevronSvgMarkup,
 } from '@lib/arrowControl';
+import { cn } from '@lib/utils';
 import type { MediaItem } from '@lib/sanity';
 
 interface Props {
@@ -58,10 +69,49 @@ const CHEVRON_RIGHT_SVG = chevronSvgMarkup('next');
 // component stays self-safe so it degrades gracefully when used standalone.
 const hasItems = items.length > 0;
 
-// Arrow wiring only (scroll works without JS). Idempotent: guards against a
-// double-bind if the script runs twice (initial load + astro:after-swap). The
-// source lives in a frontmatter constant injected via set:html because Astro
-// does not evaluate `{}` expressions inside a script element's content.
+// `buttonVariants(...)` is passed through `cn()` below rather than used raw.
+// Without it, `buttonVariants`'s base string (`relative inline-flex ...
+// rounded-lg ...`) and this component's own positioning classes (`absolute
+// ... rounded-full ... hidden sm:inline-flex`) are just concatenated as plain
+// text — no conflict resolution happens — and Tailwind's generated stylesheet
+// then orders `.relative` AFTER `.absolute` (CSS source order follows
+// Tailwind's own utility-category sort, NOT the order classes appear in the
+// string), so `position: relative` silently won and both arrows sat in flow
+// at the top-left of the row instead of where `absolute` + `top-[...]` put
+// them. `cn()` (clsx + tailwind-merge) actually REMOVES the losing class from
+// the string instead of relying on source order, which is the only way to
+// make the override reliable.
+const arrowButtonClass = (direction: 'prev' | 'next') =>
+  cn(
+    buttonVariants({ ...ARROW_BUTTON_VARIANT }),
+    ARROW_BUTTON_SHAPE,
+    // Vertically centred on the POSTER image (aspect-[2/3]), not the whole
+    // card: `top` = `--editorial-card-w` (the responsive card width, shared
+    // with the track's card wrapper below) * 0.75. Derivation: the poster's
+    // center sits `track-pad-top (1rem) + poster-height/2` below the
+    // container top, where `poster-height = --editorial-card-w * 1.5`; the
+    // button is `size-8` (2rem), so its `top` is that center minus half its
+    // own height (1rem). The two 1rem terms cancel exactly, leaving
+    // `--editorial-card-w * 0.75` — kept as one calc (not a flattened
+    // constant) so it stays correct if the track padding or button size ever
+    // change. Never a `-translate-y-1/2` transform: `ARROW_BUTTON_VARIANT`
+    // already opts out of the press affordance (`press: 'none'`), so there is
+    // no transform slot left to collide with in the first place (see
+    // `arrowControl.ts`'s doc comment on why that collision used to matter).
+    'absolute top-[calc(var(--editorial-card-w)*0.75)] z-20 hidden sm:inline-flex',
+    // Invisible/inert at rest (`.editorial-arrow` in <style>); only meaningful
+    // arrows are shown once the inline script below knows the track's state.
+    direction === 'prev'
+      ? 'editorial-arrow editorial-arrow-prev left-3 border-white/15 bg-black/60 text-zinc-50 shadow-elevation-2 backdrop-blur hover:bg-black/80 hover:text-zinc-50 focus-visible:ring-accent'
+      : 'editorial-arrow editorial-arrow-next right-3 border-accent/40 bg-black/70 text-accent shadow-elevation-2 backdrop-blur hover:bg-black/90 hover:text-accent-hover focus-visible:ring-accent'
+  );
+
+// Arrow wiring (scroll works without JS) PLUS keeping each row's
+// data-at-start/data-at-end/data-overflow current, so CSS can hide whichever
+// arrow has nothing left to do. Idempotent: guards against a double-bind if
+// the script runs twice (initial load + astro:after-swap). The source lives
+// in a frontmatter constant injected via set:html because Astro does not
+// evaluate `{}` expressions inside a script element's content.
 const ARROW_SCRIPT = `
 (function () {
   var rows = document.querySelectorAll('[data-editorial-row]');
@@ -84,11 +134,11 @@ const ARROW_SCRIPT = `
         // frontmatter. A backtick or a dollar-brace in these comments TERMINATES
         // the string and breaks the build. Plain quotes only.
         //
-        // The arrow is absolutely positioned and vertically centred on the row.
-        // When it receives focus the browser scrolls it into view, and because
-        // <html> carries scroll-behavior:smooth (BaseLayout.astro) that nudge is
-        // ANIMATED - so it does not read as a jump, it reads as the page
-        // deliberately scrolling down.
+        // The arrow is absolutely positioned and vertically centred on the
+        // poster. When it receives focus the browser scrolls it into view,
+        // and because <html> carries scroll-behavior:smooth (BaseLayout.astro)
+        // that nudge is ANIMATED - so it does not read as a jump, it reads as
+        // the page deliberately scrolling down.
         //
         // The previous attempt was mousedown + preventDefault, i.e. suppress the
         // focus so nothing gets scrolled to. That covers exactly one entry point
@@ -118,6 +168,37 @@ const ARROW_SCRIPT = `
       }
       bind(prev, -1);
       bind(next, 1);
+      // ONLY MEANINGFUL ARROWS.
+      //
+      // Hide prev at the start of the track, next at the end, and both when
+      // the track does not overflow at all - 1px tolerance each way absorbs
+      // sub-pixel rounding so neither arrow flickers at a resting scroll
+      // position. Runs on bind, on every scroll (passive - read-only, never
+      // blocks the scroll) and on resize, so it stays correct as the viewport
+      // or the content changes.
+      //
+      // MEASURED IN A REAL BROWSER (jsdom never scrolls, so this cannot be
+      // caught in Vitest): with scroll-snap-align start on each card AND left
+      // padding on the track (the title-aligned gutter, pl-4/sm:pl-6),
+      // Chromium's own snap settles the "leftmost" resting position at
+      // scrollLeft === the track's padding-left, not 0 - snapping the FIRST
+      // card flush against the snapport, not the padding. There is no
+      // matching offset at the other end (scrolling to the max settles
+      // exactly at scrollWidth minus clientWidth), so only the start side
+      // reads the track's own computed padding instead of a literal 0.
+      function updateEdges() {
+        var startPad = parseFloat(getComputedStyle(track).paddingLeft) || 0;
+        var overflow = track.scrollWidth > track.clientWidth + 1;
+        var maxScroll = track.scrollWidth - track.clientWidth;
+        var atStart = track.scrollLeft <= startPad + 1;
+        var atEnd = track.scrollLeft >= maxScroll - 1;
+        row.setAttribute('data-overflow', overflow ? 'true' : 'false');
+        row.setAttribute('data-at-start', atStart ? 'true' : 'false');
+        row.setAttribute('data-at-end', atEnd ? 'true' : 'false');
+      }
+      updateEdges();
+      track.addEventListener('scroll', updateEdges, { passive: true });
+      window.addEventListener('resize', updateEdges);
       row.setAttribute('data-arrows-bound', '1');
     })(rows[r]);
   }
@@ -132,21 +213,15 @@ const ARROW_SCRIPT = `
         {title}
       </h2>
 
-      <div class="relative">
-        {/* Prev arrow — shadcn icon button (matches the Carousel controls),
-            hover/focus-gated: only useful once already scrolled. The trailing
-            space in `editorial-arrow ` is the opacity-gate hook. */}
+      {/* `--editorial-card-w` is the ONE place the responsive card width is
+          declared; the track's card wrapper below reads it for `width`, and
+          both arrows read it (via `arrowButtonClass`) to center on the
+          poster. Keep both in sync by only ever changing it here. */}
+      <div class="relative [--editorial-card-w:130px] sm:[--editorial-card-w:200px] lg:[--editorial-card-w:270px]">
+        {/* Prev arrow — shadcn icon button (matches the Carousel controls). */}
         <button
           type="button"
-          class={buttonVariants({
-            ...ARROW_BUTTON_VARIANT,
-            // Centered with `inset-y-0 my-auto`, NOT a `-translate-y-1/2`
-            // transform (matches the shadcn Carousel's own prev/next): see
-            // `arrowControl.ts`'s `ARROW_BUTTON_VARIANT` doc comment for why a
-            // transform-centered arrow collided with the button press
-            // affordance and visibly dodged on click.
-            className: `editorial-arrow editorial-arrow-prev absolute inset-y-0 left-3 z-20 hidden my-auto ${ARROW_BUTTON_SHAPE} border-white/15 bg-black/60 text-zinc-50 shadow-elevation-2 backdrop-blur transition-opacity duration-200 hover:bg-black/80 hover:text-zinc-50 focus-visible:ring-accent sm:inline-flex`,
-          })}
+          class={arrowButtonClass('prev')}
           data-editorial-prev
           aria-label="Scroll left"
           set:html={CHEVRON_LEFT_SVG}
@@ -160,15 +235,14 @@ const ARROW_SCRIPT = `
           aria-hidden="true"
         />
 
-        {/* Next arrow — ALWAYS VISIBLE accent-amber shadcn icon button: the
-            "there's more" affordance. Sits over the right fade and scrolls the
-            row. NOT opacity-gated (no `editorial-arrow ` class). */}
+        {/* Next arrow — accent-amber shadcn icon button, the "there's more"
+            affordance. Sits over the right fade and scrolls the row. Same
+            hover/focus gating as prev (below) — it is no longer always
+            visible, since an invisible-at-rest pair reads more intentionally
+            than one arrow that pops in and one that never leaves. */}
         <button
           type="button"
-          class={buttonVariants({
-            ...ARROW_BUTTON_VARIANT,
-            className: `editorial-arrow-next absolute inset-y-0 right-3 z-20 my-auto ${ARROW_BUTTON_SHAPE} border-accent/40 bg-black/70 text-accent shadow-elevation-2 backdrop-blur transition-colors duration-200 hover:bg-black/90 hover:text-accent-hover focus-visible:ring-accent`,
-          })}
+          class={arrowButtonClass('next')}
           data-editorial-next
           aria-label="Scroll right"
           set:html={CHEVRON_RIGHT_SVG}
@@ -184,7 +258,7 @@ const ARROW_SCRIPT = `
           data-editorial-track
         >
           {items.map((item) => (
-            <div class="w-[130px] shrink-0 snap-start sm:w-[200px] lg:w-[270px]">
+            <div class="w-(--editorial-card-w) shrink-0 snap-start">
               <MediaCard
                 variant="poster"
                 kind={item.kind}
@@ -223,17 +297,39 @@ const ARROW_SCRIPT = `
   /* The right-edge fade is a real element (`.editorial-fade`) rather than a
    * track mask so it does not fight the left gutter (`pl-*` on the track). Only
    * the right side fades to black — the left side starts from a clean gutter
-   * aligned with the row title (shademanga row pattern).
-   *
-   * The prev arrow appears on hover of the row or when any child receives focus
-   * so keyboard users can reach it; rest state keeps the left side clean. The
-   * next arrow is ALWAYS visible (no opacity gate) — it is the primary
-   * "there's more" affordance. */
+   * aligned with the row title (shademanga row pattern). It stays visible at
+   * rest as the "there's more" hint even while the next arrow itself is
+   * hover-gated below. */
+
+  /* Both arrows are invisible AND inert at rest (`pointer-events: none`), so
+   * an invisible arrow never steals a click meant for the cover underneath
+   * it. They fade in using the shared control-transition tokens only where a
+   * real hover exists (`@media (hover: hover)` — a touch screen never matches
+   * this and keeps its native swipe) on row hover, and separately on
+   * `:focus-within` so keyboard users can always reach them regardless of
+   * hover capability. */
   .editorial-arrow {
     opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-duration-control) var(--ease-control);
   }
-  .editorial-row:hover .editorial-arrow,
+  @media (hover: hover) {
+    .editorial-row:hover .editorial-arrow {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
   .editorial-row:focus-within .editorial-arrow {
     opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ONLY MEANINGFUL ARROWS — set by the inline script's updateEdges(), never
+   * guessed in CSS alone. Hidden outright (not just faded) because there is
+   * nothing left for them to do in that direction. */
+  .editorial-row[data-at-start='true'] .editorial-arrow-prev,
+  .editorial-row[data-at-end='true'] .editorial-arrow-next,
+  .editorial-row[data-overflow='false'] .editorial-arrow {
+    display: none;
   }
 </style>

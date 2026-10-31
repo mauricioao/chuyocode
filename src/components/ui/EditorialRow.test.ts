@@ -76,6 +76,52 @@ describe('EditorialRow.astro', () => {
   });
 
   /**
+   * THE RELATIVE/ABSOLUTE POSITIONING REGRESSION GUARD.
+   *
+   * Introduced by 6cd40c6 (2026-09-30), which added `relative` to
+   * `buttonVariants`' base string: each arrow's class was built with plain
+   * string concatenation (`buttonVariants({..., className: \`absolute ...\`})`,
+   * no `cn()`), so nothing ever removed the base's own `relative`/`inline-flex`/
+   * `rounded-lg`. Tailwind's generated stylesheet orders utilities by its own
+   * category sort, not by where a class sits in the string, so `.relative`
+   * ended up AFTER `.absolute` in the compiled CSS and silently won — both
+   * arrows sat in flow at the top-left of the row as a small "<>" chip
+   * instead of overlaid on the track. `cn()` (clsx + tailwind-merge) fixes
+   * this by actually removing the losing class from the string.
+   */
+  it('positions each arrow with absolute, never relative', async () => {
+    const html = await render({ title: 'Row', items: [item(1), item(2)] });
+
+    const prevIdx = html.indexOf('data-editorial-prev');
+    const prevStart = html.lastIndexOf('<button', prevIdx);
+    const prevButton = html.slice(prevStart, prevIdx);
+    expect(prevButton).toContain('absolute');
+    expect(prevButton).not.toMatch(/\brelative\b/);
+
+    const nextIdx = html.indexOf('data-editorial-next');
+    const nextStart = html.lastIndexOf('<button', nextIdx);
+    const nextButton = html.slice(nextStart, nextIdx);
+    expect(nextButton).toContain('absolute');
+    expect(nextButton).not.toMatch(/\brelative\b/);
+  });
+
+  it('gives each arrow rounded-full, never rounded-lg', async () => {
+    const html = await render({ title: 'Row', items: [item(1), item(2)] });
+
+    const prevIdx = html.indexOf('data-editorial-prev');
+    const prevStart = html.lastIndexOf('<button', prevIdx);
+    const prevButton = html.slice(prevStart, prevIdx);
+    expect(prevButton).toContain('rounded-full');
+    expect(prevButton).not.toContain('rounded-lg');
+
+    const nextIdx = html.indexOf('data-editorial-next');
+    const nextStart = html.lastIndexOf('<button', nextIdx);
+    const nextButton = html.slice(nextStart, nextIdx);
+    expect(nextButton).toContain('rounded-full');
+    expect(nextButton).not.toContain('rounded-lg');
+  });
+
+  /**
    * THE ARROW-DODGE REGRESSION GUARD.
    *
    * These arrows used to be vertically centered with a `-translate-y-1/2`
@@ -84,27 +130,25 @@ describe('EditorialRow.astro', () => {
    * affordance, and Tailwind's `translate-y-*` utilities all write the same
    * underlying transform slot — so on `:active` that utility REPLACED the
    * centering offset instead of composing with it, and the button visibly
-   * jumped toward the top of the row on click. Fixed by centering with
-   * `inset-y-0 my-auto` instead (never a transform, matching the shadcn
-   * Carousel's own prev/next — see `carousel.test.tsx`) and by opting the
-   * shared `ARROW_BUTTON_VARIANT` out of the press affordance entirely
-   * (`press: 'none'`, see `arrowControl.ts`).
+   * jumped toward the top of the row on click. Now centered on the poster
+   * image via an explicit `top-[calc(...)]` (derived from the shared
+   * `--editorial-card-w` custom property), still never a transform, and the
+   * shared `ARROW_BUTTON_VARIANT` still opts out of the press affordance
+   * entirely (`press: 'none'`, see `arrowControl.ts`).
    */
-  it('centers the prev/next arrows with inset-y-0/my-auto, never a transform', async () => {
+  it('centers the prev/next arrows on the poster via a top calc, never a transform', async () => {
     const html = await render({ title: 'Row', items: [item(1), item(2)] });
 
     const prevIdx = html.indexOf('data-editorial-prev');
     const prevStart = html.lastIndexOf('<button', prevIdx);
     const prevButton = html.slice(prevStart, prevIdx);
-    expect(prevButton).toContain('inset-y-0');
-    expect(prevButton).toContain('my-auto');
+    expect(prevButton).toContain('top-[calc(var(--editorial-card-w)');
     expect(prevButton).not.toMatch(/-?translate-y-1\/2/);
 
     const nextIdx = html.indexOf('data-editorial-next');
     const nextStart = html.lastIndexOf('<button', nextIdx);
     const nextButton = html.slice(nextStart, nextIdx);
-    expect(nextButton).toContain('inset-y-0');
-    expect(nextButton).toContain('my-auto');
+    expect(nextButton).toContain('top-[calc(var(--editorial-card-w)');
     expect(nextButton).not.toMatch(/-?translate-y-1\/2/);
   });
 
@@ -132,7 +176,15 @@ describe('EditorialRow.astro', () => {
     expect(html).toContain('aria-label="Scroll right"');
   });
 
-  it('renders an always-visible accent-colored right (next) arrow', async () => {
+  /**
+   * Owner-approved behavior change: the next arrow used to be always visible
+   * (no opacity gate) as the primary "there's more" affordance. It is now
+   * hover/focus-gated exactly like prev — an invisible-at-rest pair reads
+   * more intentionally, and the right-edge fade alone keeps the "more
+   * content" hint. Only meaningful-arrow hiding (at the end of the track)
+   * still differentiates it from prev.
+   */
+  it('renders an accent-colored right (next) arrow, hover-gated like prev', async () => {
     const html = await render({ title: 'Row', items: [item(1), item(2)] });
     const nextIdx = html.indexOf('data-editorial-next');
     expect(nextIdx).toBeGreaterThan(-1);
@@ -141,8 +193,25 @@ describe('EditorialRow.astro', () => {
     const nextButton = html.slice(btnStart, nextIdx + 40);
     // It is accent-colored ("there's more" affordance)…
     expect(nextButton).toContain('text-accent');
-    // …and NOT hover-gated (no opacity-gate class on the next arrow itself).
-    expect(nextButton).not.toContain('editorial-arrow ');
+    // …and IS now opacity-gated like prev, and tagged for the at-end hide rule.
+    expect(nextButton).toContain('editorial-arrow ');
+    expect(nextButton).toContain('editorial-arrow-next');
+  });
+
+  /**
+   * ONLY MEANINGFUL ARROWS. jsdom has no layout, so this cannot pin the
+   * measured true/false outcome (that is the e2e spec's job) — only that the
+   * script computes and sets the three data attributes, on bind AND on
+   * scroll/resize, which is the part a careless edit most easily drops.
+   */
+  it('keeps data-at-start/data-at-end/data-overflow current via the inline script', async () => {
+    const html = await render({ title: 'Row', items: [item(1), item(2)] });
+    expect(html).toContain('data-at-start');
+    expect(html).toContain('data-at-end');
+    expect(html).toContain('data-overflow');
+    expect(html).toContain('track.scrollLeft');
+    expect(html).toContain("addEventListener('scroll'");
+    expect(html).toContain("addEventListener('resize'");
   });
 
   it('renders a right-edge fade element that cuts off the last card', async () => {
@@ -187,11 +256,18 @@ describe('EditorialRow.astro', () => {
     expect(html).toContain('Noticia');
   });
 
-  it('uses a responsive card width (~130px mobile → ~270px desktop)', async () => {
+  /**
+   * `--editorial-card-w` is the single source of truth for the responsive
+   * card width (~130px mobile → ~270px desktop): declared once on the row's
+   * `.relative` wrapper, read by the card wrapper's own width AND by the
+   * arrows' vertical-centering calc, so the two can never drift apart.
+   */
+  it('uses a responsive card width (~130px mobile → ~270px desktop) via one shared custom property', async () => {
     const html = await render({ title: 'Row', items: [item(1)] });
-    expect(html).toContain('w-[130px]');
-    expect(html).toContain('sm:w-[200px]');
-    expect(html).toContain('lg:w-[270px]');
+    expect(html).toContain('[--editorial-card-w:130px]');
+    expect(html).toContain('sm:[--editorial-card-w:200px]');
+    expect(html).toContain('lg:[--editorial-card-w:270px]');
+    expect(html).toContain('w-(--editorial-card-w)');
   });
 
   it('renders nothing when there are no items', async () => {
