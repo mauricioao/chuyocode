@@ -293,20 +293,36 @@ export interface AuthoredActivity {
  * is, unlike {@link getActivityForEdit} which serves exactly one row: an
  * author must see every draft/pending/live/rejected activity they have.
  *
+ * `opts.q` ("Mis actividades" own `?q=`, the same magnifier the community
+ * catalog uses): narrowed with the EXACT same `title_search`/`ilike` pattern
+ * as {@link getPublishedActivities} — `normalizeSearchQuery` +
+ * `buildTitleIlikePattern`, so a title search behaves identically in both
+ * places, never a second normalizer.
+ *
  * FAIL-SAFE: `[]` on any failure, same posture as `getExercisesByAuthor`.
  */
-export async function getActivitiesByAuthor(authorId: string): Promise<AuthoredActivity[]> {
+export async function getActivitiesByAuthor(
+  authorId: string,
+  opts?: { q?: string | null },
+): Promise<AuthoredActivity[]> {
   if (authorId.length === 0) return [];
 
   const client = getClient();
   if (!client) return [];
 
+  const normalizedQuery = normalizeSearchQuery(opts?.q ?? null);
+
   try {
-    const { data, error } = await client
+    let query = client
       .from(ACTIVITIES_TABLE)
       .select('id, title, level, status, review_note, block_count, updated_at')
       .eq('author_id', authorId)
-      .neq('status', REMOVED_STATUS)
+      .neq('status', REMOVED_STATUS);
+    if (normalizedQuery) {
+      query = query.ilike('title_search', buildTitleIlikePattern(normalizedQuery));
+    }
+
+    const { data, error } = await query
       // Most recently edited first; `id` breaks ties so the order is total.
       .order('updated_at', { ascending: false })
       .order('id', { ascending: true });

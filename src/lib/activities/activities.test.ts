@@ -534,6 +534,24 @@ describe('getActivitiesByAuthor', () => {
     });
     expect(await getActivitiesByAuthor(AUTHOR_ID)).toEqual([]);
   });
+
+  // "Mis actividades" own `?q=` (same magnifier as the community catalog) —
+  // the exact `title_search`/`ilike` pattern `getPublishedActivities` uses.
+  it('never filters by title_search when q is absent or blank', async () => {
+    awaitResults.push({ data: [], error: null });
+    await getActivitiesByAuthor(AUTHOR_ID);
+    expect(ilikeMock).not.toHaveBeenCalled();
+
+    awaitResults.push({ data: [], error: null });
+    await getActivitiesByAuthor(AUTHOR_ID, { q: '   ' });
+    expect(ilikeMock).not.toHaveBeenCalled();
+  });
+
+  it('filters by title_search with the same folded ilike pattern as the catalog', async () => {
+    awaitResults.push({ data: [], error: null });
+    await getActivitiesByAuthor(AUTHOR_ID, { q: 'Canción' });
+    expect(ilikeMock).toHaveBeenCalledWith('title_search', '%cancion%');
+  });
 });
 
 const PUBLISHED_REVISION_ID = '88888888-8888-8888-8888-888888888888';

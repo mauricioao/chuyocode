@@ -198,6 +198,17 @@ function clearHref(): string {
     align-items: center;
     position: relative;
     height: 36px;
+    /* Narrow-window overflow fix (`DeskWindow.astro`'s own titlebar actions
+     * slot, below its `desk:` breakpoint): this whole component is a flex
+     * ITEM wherever it's placed (actions row, `PageTitle`'s own row), and a
+     * fixed-width open bar below used to refuse to shrink there, clipping
+     * the lens/clear off a narrow titlebar. `min-width: 0` lets it shrink
+     * below its content size instead of overflowing; `max-width: 100%`
+     * keeps it from ever claiming more than its flex/grid parent gives it.
+     * Both are no-ops whenever there is enough room (every existing caller
+     * today), so Libros/Noticias (client mode) render unchanged. */
+    min-width: 0;
+    max-width: 100%;
   }
 
   /* The open/close state is driven by an '.is-open' class — set server-side in
@@ -221,8 +232,15 @@ function clearHref(): string {
   }
   .chu-search.is-open .chu-search-bar,
   .chu-search:not(.is-open):focus-within .chu-search-bar {
-    /* Roughly one card wide. */
+    /* Roughly one card wide — PREFERRED, not fixed: `flex-shrink: 1`
+     * (explicit, matching `.chu-search`'s own fix above) lets it narrow
+     * instead of overflowing once the titlebar frees less than 220px for
+     * it (see `DeskWindow.astro`'s own narrow-window rule). `min-width: 0`
+     * is the actual unlock — without it a flex item's default automatic
+     * minimum is its content size, which here is "220px" itself. */
     width: 220px;
+    flex-shrink: 1;
+    min-width: 0;
     border-bottom-color: var(--color-accent-ink, #facc15);
   }
 

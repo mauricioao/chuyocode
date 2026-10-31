@@ -18,6 +18,17 @@
  * activity (`mis-actividades/index.astro`'s own loader) — same posture as
  * the practice page's own share dialog: no third party ever learns which
  * activity got shared, and the dialog needs no network once it opens.
+ *
+ * Own search box (`?q=`): `initialActivities` already comes back FILTERED
+ * from the server (`getActivitiesByAuthor`'s own `q` option) — this island
+ * does no client-side filtering of its own. `query` only decides which EMPTY
+ * state to show: an empty list with a non-empty `query` is "nothing matched
+ * the search" (`mis-actividades-no-results`, with a link back to the
+ * unfiltered list), never the "you haven't created anything yet"
+ * `mis-actividades-empty` state — that one stays reserved for a genuinely
+ * empty workspace, no search involved. The same branch covers deleting the
+ * last matching row while a search is active: the list re-renders empty,
+ * `query` is still set, so it falls into the no-results state too.
  */
 import { useCallback, useState } from 'react';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
@@ -42,6 +53,8 @@ export interface MisActividadesActivity {
 export interface MisActividadesIslandProps {
   lang: Lang;
   initialActivities: MisActividadesActivity[];
+  /** Current `?q=`, trimmed/`null` the same way the page itself reads it — decides which empty state renders, see file header. */
+  query?: string | null;
 }
 
 /** `activities.status` -> the `editor.status*` key that names it — reused verbatim, see file header. */
@@ -52,7 +65,7 @@ const STATUS_LABEL_KEYS = {
   rejected: 'statusRejected',
 } as const;
 
-export default function MisActividadesIsland({ lang, initialActivities }: MisActividadesIslandProps) {
+export default function MisActividadesIsland({ lang, initialActivities, query = null }: MisActividadesIslandProps) {
   const t = UI_LABELS[lang].activities.myActivities;
   const editorT = UI_LABELS[lang].activities.editor;
   const levelLabels = UI_LABELS[lang].english.levels;
@@ -102,6 +115,25 @@ export default function MisActividadesIsland({ lang, initialActivities }: MisAct
   }
 
   if (activities.length === 0) {
+    // Nothing matched the search — a DIFFERENT empty state from the
+    // genuinely-empty-workspace one below (see file header): the message
+    // names the query, and the link clears it rather than offering to
+    // create a new activity.
+    if (query) {
+      return (
+        <div
+          data-testid="mis-actividades-no-results"
+          className="flex flex-col items-start gap-4 rounded-lg border border-border bg-surface-soft p-6 text-muted-foreground"
+        >
+          <Emoji name="llama" size={48} />
+          <p>{t.noResults(query)}</p>
+          <a href={`/${lang}/mis-actividades`} className="text-sm font-medium text-accent-ink hover:underline">
+            {t.clearSearch}
+          </a>
+        </div>
+      );
+    }
+
     return (
       <div
         data-testid="mis-actividades-empty"
