@@ -29,3 +29,23 @@ export const VARIOS_JUEGOS_ENABLED = false;
  * just unreachable from the UI.
  */
 export const CHANGE_MOLD_ENABLED = false;
+
+/**
+ * Owner decision (2026-10-31): the presentation icon stays hidden for now.
+ * While `false`:
+ *  - the practice page's title-bar "Presentar" icon link
+ *    (`[id].astro`'s `data-testid="activity-present-link"`, `sm:` and up)
+ *    and the phone "Más" menu row (`data-testid="activity-present-link-menu"`)
+ *    are both dropped;
+ *  - the editor's "Ver como presentación" icon
+ *    (`ActivityEditorIsland.tsx`'s `data-testid="view-as-presentation-button"`,
+ *    desktop actions and phone menu) is dropped, and its "Usar en clase"
+ *    primary action (`data-testid="use-in-class-button"`) falls back to the
+ *    action the editor would otherwise show for that same state (e.g.
+ *    "Compartir" for a live activity).
+ * The route itself, `/[lang]/ingles/actividades/[id]/presentar`, stays
+ * reachable by direct link — only these UI entry points are gated. The
+ * route's own defensive 404 logic, the presentation island and the
+ * presentation libs (`presentationSlides.ts`, etc.) stay intact and tested.
+ */
+export const PRESENTATION_ENABLED = false;

@@ -77,6 +77,7 @@ import SubmitForReviewDialog from './SubmitForReviewDialog';
 import PresentationIsland from './PresentationIsland';
 import ShareDialog from '@/components/islands/ShareDialog';
 import { editorPrimaryAction, editorStatusPillKey } from '@/lib/activities/editorPrimaryAction';
+import { PRESENTATION_ENABLED } from '@/lib/activities/flags';
 import { DESK_WINDOW_ATTR, EDITOR_WINDOW_GUARD_KEY, type EditorWindowGuard } from '@/lib/ui/deskWindow';
 import { ICON_TOOLTIP_BUBBLE_CLASS, ICON_TOOLTIP_TRIGGER_CLASS } from '@/lib/ui/iconTooltip';
 import { useIsDesktop } from '@/hooks/useIsDesktop';
@@ -1158,7 +1159,22 @@ export default function ActivityEditorIsland({
   // two status columns the editor already has; `status`/`revisionStatus`
   // both update OPTIMISTICALLY on a successful submit (see
   // `handleConfirmSubmit`), so this follows along live, no reload needed.
-  const primaryActionKind = editorPrimaryAction({ status, revisionStatus });
+  // `PRESENTATION_ENABLED` (owner decision 2026-10-31, `flags.ts`): "Usar en
+  // clase" opens the presentation route, so it never renders while that
+  // stays hidden. Unlike a live activity's `submitChangesForReview`/`share`
+  // split, THIS state (`revisionStatus === 'pending_review'`, not yet
+  // published) means the author already sent it to review — offering
+  // "Enviar a revisión"/"Enviar de nuevo a revisión" here would be
+  // misleading (nothing new to send) and could hit the submit endpoint in a
+  // state it doesn't expect. Parent decision: show NO primary action for
+  // this state instead — the status pill already reads "En revisión"
+  // (`editorStatusPillKey`, unaffected by this flag); once the author edits
+  // and saves, the latest revision moves to `draft` and the normal "Enviar
+  // a revisión" reappears through `editorPrimaryAction`'s own existing
+  // logic, untouched here.
+  const rawPrimaryActionKind = editorPrimaryAction({ status, revisionStatus });
+  const primaryActionKind =
+    rawPrimaryActionKind === 'useInClass' && !PRESENTATION_ENABLED ? null : rawPrimaryActionKind;
   const primaryActionLabel =
     primaryActionKind === 'submitChangesForReview'
       ? t.submitChangesForReview
@@ -1168,7 +1184,9 @@ export default function ActivityEditorIsland({
           ? t.useInClass
           : primaryActionKind === 'share'
             ? tPractice.share
-            : t.submitForReview;
+            : primaryActionKind === 'submitForReview'
+              ? t.submitForReview
+              : '';
   // "Usar en clase": the author's OWN presentation of this not-yet-published
   // activity (`presentar.astro`'s own AUTHOR PREVIEW, R1 — already allows
   // any non-removed status, this editor's own `getActivityForEdit` included).
@@ -1195,7 +1213,7 @@ export default function ActivityEditorIsland({
   // none of them drift from the others' visual weight.
   const PRIMARY_BUTTON_CLASS = '!border-pop-yellow !bg-pop-yellow !text-[#3a2e00] hover:!bg-pop-yellow/80';
   const primaryActionControl =
-    primaryActionKind === 'useInClass' ? (
+    primaryActionKind === null ? null : primaryActionKind === 'useInClass' ? (
       // `target="_top"` (see `presentarHref`'s own comment above): escapes
       // to the real top-level tab whether this editor is embedded in a
       // window or not — a no-op outside embedded mode (a direct, top-level
@@ -1251,19 +1269,30 @@ export default function ActivityEditorIsland({
   const desktopActions = (
     <>
       {desktopLevelAndStatus}
-      <button
-        type="button"
-        data-testid="view-as-presentation-button"
-        aria-label={t.viewAsPresentation}
-        aria-describedby={viewAsPresentationTooltipId}
-        className={ICON_TOOLTIP_TRIGGER_CLASS}
-        onClick={openPresentationPreview}
-      >
-        <PresentationIcon aria-hidden="true" size={16} />
-        <span role="tooltip" id={viewAsPresentationTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
-          {t.viewAsPresentation}
-        </span>
-      </button>
+      {/* `PRESENTATION_ENABLED` (owner decision 2026-10-31, `flags.ts`): the
+          presentation icon stays hidden for now — `PresentationIsland`
+          below (and the `showPresentationPreview` state it reads) stay
+          intact and tested, just unreachable from this trigger. */}
+      {PRESENTATION_ENABLED && (
+        <button
+          type="button"
+          data-testid="view-as-presentation-button"
+          aria-label={t.viewAsPresentation}
+          aria-describedby={viewAsPresentationTooltipId}
+          className={ICON_TOOLTIP_TRIGGER_CLASS}
+          onClick={openPresentationPreview}
+        >
+          <PresentationIcon aria-hidden="true" size={16} />
+          <span role="tooltip" id={viewAsPresentationTooltipId} className={ICON_TOOLTIP_BUBBLE_CLASS}>
+            {t.viewAsPresentation}
+          </span>
+        </button>
+      )}
+      {/* `primaryActionControl` is `null` for the "already sent, not yet
+          published" state while `PRESENTATION_ENABLED` is false (see its own
+          header above) — the level select (and the presentation icon, if
+          enabled) simply end up alone in this slot; nothing special to lay
+          out for a slot that can already render as few as one child. */}
       {primaryActionControl}
     </>
   );
@@ -1350,15 +1379,19 @@ export default function ActivityEditorIsland({
             </span>
           )}
         </div>
-        <button
-          type="button"
-          data-testid="view-as-presentation-button"
-          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-muted"
-          onClick={openPresentationPreview}
-        >
-          <PresentationIcon aria-hidden="true" size={16} />
-          {t.viewAsPresentation}
-        </button>
+        {/* `PRESENTATION_ENABLED` (owner decision 2026-10-31, `flags.ts`):
+            same gate as the desktop trigger above. */}
+        {PRESENTATION_ENABLED && (
+          <button
+            type="button"
+            data-testid="view-as-presentation-button"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-muted"
+            onClick={openPresentationPreview}
+          >
+            <PresentationIcon aria-hidden="true" size={16} />
+            {t.viewAsPresentation}
+          </button>
+        )}
         {primaryActionControl}
       </div>
     </div>

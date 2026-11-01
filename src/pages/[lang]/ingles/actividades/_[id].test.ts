@@ -676,7 +676,7 @@ describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)
     expect(html).toContain('data-testid="worksheet-player"');
   });
 
-  it('still renders the Compartir, Imprimir and Presentar entry points for a guest', async () => {
+  it('still renders the Compartir and Imprimir entry points for a guest (Presentar stays hidden, PRESENTATION_ENABLED)', async () => {
     activityResult.value = {
       id: 'abc',
       title: 'x',
@@ -700,7 +700,7 @@ describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)
     const html = await res.text();
     expect(html).toContain('data-testid="exercise-share"');
     expect(html).toContain('data-testid="activity-print-link"');
-    expect(html).toContain('data-testid="activity-present-link"');
+    expect(html).not.toContain('data-testid="activity-present-link"');
   });
 
   it('404s an anonymous visit to a draft/unpublished activity, same as a missing one', async () => {
@@ -713,8 +713,8 @@ describe('GET /[lang]/ingles/actividades/[id] — guest play (anonymous visitor)
   });
 });
 
-describe('GET /[lang]/ingles/actividades/[id] — "Presentar" (presentation mode v1)', () => {
-  it('links to the presentation page when the activity has at least one quiz question', async () => {
+describe('GET /[lang]/ingles/actividades/[id] — "Presentar" (presentation mode v1, hidden while PRESENTATION_ENABLED is false, owner decision 2026-10-31)', () => {
+  it('never links to the presentation page, even when the activity has at least one quiz question', async () => {
     activityResult.value = {
       id: 'abc',
       title: 'x',
@@ -736,11 +736,10 @@ describe('GET /[lang]/ingles/actividades/[id] — "Presentar" (presentation mode
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="activity-present-link"');
-    expect(html).toContain('href="/es/ingles/actividades/abc/presentar"');
+    expect(html).not.toContain('data-testid="activity-present-link"');
   });
 
-  it('shows the link for an activity with only worksheet blocks (the worksheet zoom tour, sprint week 3)', async () => {
+  it('never shows the link for an activity with only worksheet blocks either (the content check alone used to be enough)', async () => {
     activityResult.value = {
       id: 'abc',
       title: 'x',
@@ -761,7 +760,7 @@ describe('GET /[lang]/ingles/actividades/[id] — "Presentar" (presentation mode
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
-    expect(html).toContain('data-testid="activity-present-link"');
+    expect(html).not.toContain('data-testid="activity-present-link"');
   });
 
   it('hides the link for an activity with only an EMPTY worksheet block (no zones yet)', async () => {
@@ -874,7 +873,7 @@ describe('GET /[lang]/ingles/actividades/[id] — "Basado en" credit line (D7)',
 // tooltip pattern (see the dedicated "N6 follow-up" describe block below
 // for the full breakpoint/menu-label contract).
 describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with tooltips (T2)', () => {
-  it('the standalone Presentar trigger (`sm:` and up) carries an accessible name and a linked tooltip', async () => {
+  it('never renders the standalone Presentar trigger\'s accessible name or tooltip (hidden, PRESENTATION_ENABLED)', async () => {
     activityResult.value = {
       id: 'abc',
       title: 'x',
@@ -897,13 +896,12 @@ describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with t
     });
     const html = await res.text();
 
-    expect(html).toContain('aria-label="Presentar"');
-    expect(html).toContain('aria-describedby="action-present-tooltip"');
-    expect(html).toContain('id="action-present-tooltip"');
-    expect(html).toContain('role="tooltip"');
+    expect(html).not.toContain('aria-label="Presentar"');
+    expect(html).not.toContain('action-present-tooltip');
 
     // Imprimir (now "Más"-only, N6 follow-up): an accessible name, but no
-    // tooltip id left — a visible text label replaces it instead.
+    // tooltip id left — a visible text label replaces it instead. Unaffected
+    // by the presentation flag.
     expect(html).toContain('aria-label="Imprimir"');
     expect(html).not.toContain('action-print-tooltip');
   });
@@ -974,7 +972,7 @@ describe('GET /[lang]/ingles/actividades/[id] — action bar icon buttons with t
 // SAME phone dropdown pattern at every width, instead of the old
 // desktop-only flat row.
 describe('GET /[lang]/ingles/actividades/[id] — N6: fewer equal-weight buttons, "Más" at every width', () => {
-  it('keeps Compartir, Presentar and the focus-mode toggle OUTSIDE the "Más" panel', async () => {
+  it('keeps Compartir and the focus-mode toggle OUTSIDE the "Más" panel (Presentar stays hidden, PRESENTATION_ENABLED)', async () => {
     activityResult.value = {
       id: 'abc',
       title: 'x',
@@ -1001,8 +999,8 @@ describe('GET /[lang]/ingles/actividades/[id] — N6: fewer equal-weight buttons
 
     expect(html.indexOf('data-testid="exercise-share"')).toBeGreaterThan(-1);
     expect(html.indexOf('data-testid="exercise-share"')).toBeLessThan(morePanel);
-    expect(html.indexOf('data-testid="activity-present-link"')).toBeLessThan(morePanel);
     expect(html.indexOf('id="activity-focus-mode-toggle"')).toBeLessThan(morePanel);
+    expect(html).not.toContain('data-testid="activity-present-link"');
   });
 
   it('holds only Imprimir, Duplicar and Reportar inside "Más", in that order', async () => {
@@ -1048,7 +1046,8 @@ describe('GET /[lang]/ingles/actividades/[id] — N6: fewer equal-weight buttons
     const morePanel = html.indexOf('data-desk-window-more-content');
     expect(html.indexOf('data-testid="activity-duplicate-guest"')).toBeGreaterThan(morePanel);
     expect(html.indexOf('data-testid="activity-report-guest"')).toBeGreaterThan(morePanel);
-    // Compartir/Presentar/focus-mode stay outside, same as for a signed-in visitor.
+    // Compartir/focus-mode stay outside, same as for a signed-in visitor
+    // (Presentar stays hidden entirely, PRESENTATION_ENABLED).
     expect(html.indexOf('data-testid="exercise-share"')).toBeLessThan(morePanel);
   });
 });
@@ -1058,18 +1057,21 @@ describe('GET /[lang]/ingles/actividades/[id] — N6: fewer equal-weight buttons
 // five standalone icons (❤/Compartir/Presentar/Modo enfoque/Más) left no
 // room for it. Fix, by the STANDARD `sm` breakpoint (640px — not the custom
 // `desk:` one the rest of this page uses):
-//   - below `sm`: only ❤ and "Modo enfoque" stay standalone; Compartir and
-//     Presentar rejoin "Más" (phone order: Compartir, Presentar, Imprimir,
-//     Duplicar, Reportar).
-//   - `sm` and up: unchanged from N6 (Compartir/Presentar standalone; "Más"
-//     = Imprimir, Duplicar, Reportar).
-// ONE "Más" panel (not two menus): each of Compartir/Presentar is rendered
-// TWICE — once standalone (wrapped `hidden sm:contents`), once inside the
-// SAME panel (phone-only, `contents sm:hidden` / `sm:hidden`) — distinct
-// test ids (`exercise-share-menu`, `activity-present-link-menu`) keep the
-// two nodes unambiguous. Every item inside "Más" also gained a visible
-// icon+text label (`MENU_ITEM_CLASS`), replacing the old icon-only +
-// hover-tooltip-only pattern that had no text at all on a touch device.
+//   - below `sm`: only ❤ and "Modo enfoque" stay standalone; Compartir
+//     rejoins "Más" (phone order: Compartir, Imprimir, Duplicar, Reportar —
+//     Presentar WOULD rejoin it too, right after Compartir, but it stays
+//     hidden entirely, PRESENTATION_ENABLED, owner decision 2026-10-31).
+//   - `sm` and up: unchanged from N6 (Compartir standalone; "Más" =
+//     Imprimir, Duplicar, Reportar).
+// ONE "Más" panel (not two menus): Compartir is rendered TWICE — once
+// standalone (wrapped `hidden sm:contents`), once inside the SAME panel
+// (phone-only, `contents sm:hidden`) — distinct test ids (`exercise-share`,
+// `exercise-share-menu`) keep the two nodes unambiguous; Presentar would
+// follow the exact same two-copy pattern (`activity-present-link`/
+// `activity-present-link-menu`) if `PRESENTATION_ENABLED` turned back on.
+// Every item inside "Más" also gained a visible icon+text label
+// (`MENU_ITEM_CLASS`), replacing the old icon-only + hover-tooltip-only
+// pattern that had no text at all on a touch device.
 describe('GET /[lang]/ingles/actividades/[id] — N6 follow-up: phone collapse + "Más" labels', () => {
   function activityWithQuiz() {
     return {
@@ -1108,16 +1110,17 @@ describe('GET /[lang]/ingles/actividades/[id] — N6 follow-up: phone collapse +
     return tag.match(/class="([^"]*)"/)?.[1];
   }
 
-  it('Compartir/Presentar standalone copies are hidden below `sm`, shown `sm:` and up', async () => {
+  it('Compartir\'s standalone copy is hidden below `sm`, shown `sm:` and up (Presentar never renders, PRESENTATION_ENABLED)', async () => {
     activityResult.value = activityWithQuiz();
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
-    // Exactly two `hidden sm:contents` wrappers: one around the standalone
-    // ShareDialog, one around the standalone Presentar link.
-    expect((html.match(/hidden sm:contents/g) ?? []).length).toBe(2);
+    // Exactly one `hidden sm:contents` wrapper: around the standalone
+    // ShareDialog. Presentar's own matching wrapper (`canPresent`) would add
+    // a second one, but `canPresent` is `false` while the flag is off.
+    expect((html.match(/hidden sm:contents/g) ?? []).length).toBe(1);
     expect(classNear(html, 'exercise-share')).toContain('size-9'); // the iconOnly trigger itself, untouched
   });
 
@@ -1137,7 +1140,7 @@ describe('GET /[lang]/ingles/actividades/[id] — N6 follow-up: phone collapse +
     }
   });
 
-  it('"Más" holds Compartir, Presentar, Imprimir, Duplicar, Reportar in that order (phone order)', async () => {
+  it('"Más" holds Compartir, Imprimir, Duplicar, Reportar in that order (phone order; Presentar is absent, PRESENTATION_ENABLED)', async () => {
     activityResult.value = activityWithQuiz();
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -1146,20 +1149,19 @@ describe('GET /[lang]/ingles/actividades/[id] — N6 follow-up: phone collapse +
     const html = await res.text();
     const morePanel = html.indexOf('data-desk-window-more-content');
     const shareMenu = html.indexOf('data-testid="exercise-share-menu"');
-    const presentMenu = html.indexOf('data-testid="activity-present-link-menu"');
     const print = html.indexOf('data-testid="activity-print-link"');
     const duplicate = html.indexOf('data-testid="duplicate-activity-button"');
     const report = html.indexOf('data-testid="report-activity-button"');
 
     expect(morePanel).toBeGreaterThan(-1);
     expect(shareMenu).toBeGreaterThan(morePanel);
-    expect(presentMenu).toBeGreaterThan(shareMenu);
-    expect(print).toBeGreaterThan(presentMenu);
+    expect(print).toBeGreaterThan(shareMenu);
     expect(duplicate).toBeGreaterThan(print);
     expect(report).toBeGreaterThan(duplicate);
+    expect(html).not.toContain('data-testid="activity-present-link-menu"');
   });
 
-  it('Compartir/Presentar\'s "Más" copies are phone-only (`sm:hidden`/`contents sm:hidden`)', async () => {
+  it('Compartir\'s "Más" copy is phone-only (`contents sm:hidden`); Presentar\'s "Más" copy never renders', async () => {
     activityResult.value = activityWithQuiz();
     const res = await render('https://chuyocode.test/es/ingles/actividades/abc', {
       params: { lang: 'es', id: 'abc' },
@@ -1167,7 +1169,7 @@ describe('GET /[lang]/ingles/actividades/[id] — N6 follow-up: phone collapse +
     });
     const html = await res.text();
     expect(html).toContain('contents sm:hidden'); // wraps the ShareDialog menu copy
-    expect(classNear(html, 'activity-present-link-menu')).toContain('sm:hidden');
+    expect(html).not.toContain('data-testid="activity-present-link-menu"');
   });
 
   it('every "Más" item carries a visible icon + text label (`min-h-11`), not just a hover tooltip', async () => {
@@ -1177,9 +1179,10 @@ describe('GET /[lang]/ingles/actividades/[id] — N6 follow-up: phone collapse +
       locals: { user: { id: 'user-1' } },
     });
     const html = await res.text();
+    // `activity-present-link-menu` is deliberately not in this list — it
+    // never renders while PRESENTATION_ENABLED is false.
     const items: Array<[string, string]> = [
       ['exercise-share-menu', 'Compartir'],
-      ['activity-present-link-menu', 'Presentar'],
       ['activity-print-link', 'Imprimir'],
       ['duplicate-activity-button', 'Duplicar'],
       ['report-activity-button', 'Reportar'],

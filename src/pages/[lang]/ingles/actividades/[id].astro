@@ -82,6 +82,7 @@ import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
 import { getPublishedActivity, getActivityForEdit } from '@lib/activities/activities';
 import { hasPresentableContent } from '@lib/activities/presentationSlides';
+import { PRESENTATION_ENABLED } from '@lib/activities/flags';
 import { ROW_PADDING_X } from '@lib/ui/layout';
 import { hasHeartedActivity } from '@lib/activities/hearts';
 import { qrSvg, shareUrl } from '@lib/qr';
@@ -313,8 +314,13 @@ if (!hostMode) {
    * `hasPresentableQuiz` sprint week 3's worksheet zoom tour) — the single
    * source of truth for that, so this button's visibility can never drift
    * from what the route itself would actually serve.
+   *
+   * `PRESENTATION_ENABLED` (owner decision 2026-10-31, `flags.ts`): the
+   * presentation icon stays hidden for now — the route itself keeps working
+   * by direct link, only this UI entry point (and the phone "Más" row
+   * below) is gated.
    */
-  canPresent = hasPresentableContent(activity.blocks);
+  canPresent = PRESENTATION_ENABLED && hasPresentableContent(activity.blocks);
 
   /**
    * "Compartir" (D8): built on the server exactly like the curated exercise

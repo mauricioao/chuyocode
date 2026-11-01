@@ -48,6 +48,26 @@ if (typeof (globalThis as { createImageBitmap?: unknown }).createImageBitmap !==
     Promise.resolve({ width: 100, height: 100, close: () => {} } as unknown as ImageBitmap);
 }
 
+// `PRESENTATION_ENABLED` (owner decision 2026-10-31, `flags.ts`): the
+// presentation preview trigger/overlay stays hidden by default — every
+// test below exercises exactly that against the real, unmocked `false`
+// value, no mock needed. A live getter (not a plain value, so each read
+// reflects the CURRENT `flagsMock.presentationEnabled`, no `resetModules`/
+// re-import needed) lets the one describe block that actually drives the
+// overlay ("Ver como presentación" overlay, below) flip it to `true` for
+// its own tests only, so that functionality itself stays covered and isn't
+// orphaned; the top-level `afterEach` below restores it to `false`.
+const flagsMock = vi.hoisted(() => ({ presentationEnabled: false }));
+vi.mock('@/lib/activities/flags', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/activities/flags')>('@/lib/activities/flags');
+  return {
+    ...actual,
+    get PRESENTATION_ENABLED() {
+      return flagsMock.presentationEnabled;
+    },
+  };
+});
+
 const realLocation = window.location;
 
 beforeEach(() => {
@@ -104,6 +124,10 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  // The "Ver como presentación" overlay describe block (below) is the only
+  // one that flips this live getter to `true` for its own tests — reset it
+  // unconditionally so it never leaks into a later test.
+  flagsMock.presentationEnabled = false;
   delete (window as unknown as { location?: unknown }).location;
   (window as unknown as { location: Location }).location = realLocation;
   // A handful of "one active block on entry" tests set this to exercise
@@ -518,8 +542,22 @@ describe('ActivityEditorIsland — window title bar: the EDITABLE title (PART 6b
   // "Ver como presentación" icon button, then the one primary action —
   // same relative order the title bar already read before this pass, just
   // with the level select relocated into this slot instead of the title
-  // group.
-  it('orders the actions slot as level select, then the presentation button, then the primary submit button', () => {
+  // group. `PRESENTATION_ENABLED` (owner decision 2026-10-31) drops that
+  // icon from the slot entirely while it's off — the level select docks
+  // directly against the primary action instead.
+  it('orders the actions slot as level select then the primary submit button (the presentation button is absent, PRESENTATION_ENABLED)', () => {
+    renderEditor({ initialLevel: 'B1' });
+    const actionsSlot = document.getElementById('desk-window-actions')!;
+    const order = [...actionsSlot.querySelectorAll('[data-testid]')].map((el) => el.getAttribute('data-testid'));
+    const levelIndex = order.indexOf('activity-level-select');
+    const submitIndex = order.indexOf('submit-for-review-button');
+    expect(levelIndex).toBeGreaterThanOrEqual(0);
+    expect(submitIndex).toBeGreaterThan(levelIndex);
+    expect(order).not.toContain('view-as-presentation-button');
+  });
+
+  it('while PRESENTATION_ENABLED is true, slots the presentation button between the level select and the primary action', () => {
+    flagsMock.presentationEnabled = true;
     renderEditor({ initialLevel: 'B1' });
     const actionsSlot = document.getElementById('desk-window-actions')!;
     const order = [...actionsSlot.querySelectorAll('[data-testid]')].map((el) => el.getAttribute('data-testid'));
@@ -534,8 +572,11 @@ describe('ActivityEditorIsland — window title bar: the EDITABLE title (PART 6b
   // Owner report continued: "quita los bordes de esos íconos al lado del
   // nivel; no aportan nada salvo hacer más alta la barra superior" — see
   // `iconTooltip.ts`'s own `ICON_TOOLTIP_TRIGGER_CLASS` header for the
-  // matching change (flat `size-9`, `border-transparent`).
-  it('renders the presentation trigger with no visible border (ICON_TOOLTIP_TRIGGER_CLASS, T2 titlebar polish)', () => {
+  // matching change (flat `size-9`, `border-transparent`). Covered only
+  // while PRESENTATION_ENABLED is true — the trigger does not render at
+  // all otherwise (proven above).
+  it('while PRESENTATION_ENABLED is true, renders the presentation trigger with no visible border (ICON_TOOLTIP_TRIGGER_CLASS, T2 titlebar polish)', () => {
+    flagsMock.presentationEnabled = true;
     renderEditor();
     expect(screen.getByTestId('view-as-presentation-button').className).not.toContain('border-border');
   });
@@ -579,15 +620,23 @@ describe('ActivityEditorIsland — mobile title bar "⋯" menu (bug fix, owner r
     expect(screen.getByTestId('activity-level-select')).toBeTruthy();
   });
 
-  it('on a phone, collapses the level select/status badge/"Ver como presentación"/"Enviar a revisión" behind one "⋯" trigger', () => {
+  it('on a phone, collapses the level select/status badge/"Enviar a revisión" behind one "⋯" trigger ("Ver como presentación" stays hidden, PRESENTATION_ENABLED)', () => {
     stubMobileViewport();
     renderEditor();
     expect(screen.getByTestId('activity-mobile-menu-trigger')).toBeTruthy();
     const menu = screen.getByTestId('activity-mobile-menu-content');
     expect(menu.contains(screen.getByTestId('activity-level-select'))).toBe(true);
     expect(menu.contains(screen.getByTestId('activity-status-badge'))).toBe(true);
-    expect(menu.contains(screen.getByTestId('view-as-presentation-button'))).toBe(true);
     expect(menu.contains(screen.getByTestId('submit-for-review-button'))).toBe(true);
+    expect(screen.queryByTestId('view-as-presentation-button')).toBeNull();
+  });
+
+  it('while PRESENTATION_ENABLED is true, "Ver como presentación" also collapses into that same "⋯" menu', () => {
+    flagsMock.presentationEnabled = true;
+    stubMobileViewport();
+    renderEditor();
+    const menu = screen.getByTestId('activity-mobile-menu-content');
+    expect(menu.contains(screen.getByTestId('view-as-presentation-button'))).toBe(true);
   });
 
   it('on a phone, the title-bar actions slot renders nothing of its own — those two actions moved into the "⋯" menu', () => {
@@ -626,15 +675,22 @@ describe('ActivityEditorIsland — window title bar sync (PART 6b)', () => {
     expect(document.getElementById('desk-window-title')?.textContent).toBe('New activity');
   });
 
-  it('renders "Ver como presentación", "Enviar a revisión" and the level select into the window title bar actions slot, not the header row', () => {
+  it('renders "Enviar a revisión" and the level select into the window title bar actions slot, not the header row ("Ver como presentación" stays hidden, PRESENTATION_ENABLED)', () => {
     renderEditor();
     const actionsSlot = document.getElementById('desk-window-actions');
-    expect(actionsSlot?.contains(screen.getByTestId('view-as-presentation-button'))).toBe(true);
     expect(actionsSlot?.contains(screen.getByTestId('submit-for-review-button'))).toBe(true);
     expect(actionsSlot?.contains(screen.getByTestId('activity-level-select'))).toBe(true);
+    expect(screen.queryByTestId('view-as-presentation-button')).toBeNull();
     expect(screen.getByTestId('activity-editor-card').contains(screen.getByTestId('submit-for-review-button'))).toBe(
       false,
     );
+  });
+
+  it('while PRESENTATION_ENABLED is true, "Ver como presentación" renders into that same actions slot', () => {
+    flagsMock.presentationEnabled = true;
+    renderEditor();
+    const actionsSlot = document.getElementById('desk-window-actions');
+    expect(actionsSlot?.contains(screen.getByTestId('view-as-presentation-button'))).toBe(true);
   });
 
   // With the level select now sharing the actions slot, a ~1000-1150px window
@@ -1517,20 +1573,45 @@ describe('ActivityEditorIsland — one primary action per state', () => {
     expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
   });
 
-  it('in review, first publication: "Usar en clase" links to the author\'s own presentation, full screen', () => {
+  // `PRESENTATION_ENABLED` (owner decision 2026-10-31, `flags.ts`): "Usar en
+  // clase" opens the presentation route, so it never renders while that
+  // stays hidden. This state (the author already sent it to review, not
+  // yet published) means there is nothing new to send either — parent
+  // decision: NO primary action at all, rather than a misleading "Enviar a
+  // revisión" for something already under review (which could also hit the
+  // submit endpoint in a state it doesn't expect). The status pill already
+  // says so.
+  it('in review, first publication: shows no primary action at all (the presentation icon stays hidden)', () => {
+    renderEditor({ initialStatus: 'pending_review', initialRevisionStatus: 'pending_review' });
+    expect(screen.queryByTestId('use-in-class-button')).toBeNull();
+    expect(screen.queryByTestId('submit-for-review-button')).toBeNull();
+    expect(screen.queryByTestId('activity-share-button')).toBeNull();
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('En revisión');
+  });
+
+  // Same state, the OTHER branch: the broken-invariant window
+  // `editorPrimaryAction.ts`'s own header documents (`status` stuck on
+  // `rejected` while the revision is already `pending_review`) still
+  // resolves to `useInClass` there, so it shows no primary action either,
+  // for the exact same reason.
+  it('broken invariant, status stuck on rejected: shows no primary action at all', () => {
+    renderEditor({ initialStatus: 'rejected', initialRevisionStatus: 'pending_review' });
+    expect(screen.queryByTestId('use-in-class-button')).toBeNull();
+    expect(screen.queryByTestId('submit-for-review-button')).toBeNull();
+    expect(screen.queryByTestId('activity-share-button')).toBeNull();
+  });
+
+  // Flag-on coverage: with `PRESENTATION_ENABLED` true, this exact state
+  // goes back to `editorPrimaryAction`'s own unmodified `useInClass` result
+  // — the author's own full-screen presentation of this not-yet-published
+  // activity, same posture as `presentarHref`'s own header.
+  it('while PRESENTATION_ENABLED is true, "Usar en clase" links to the author\'s own presentation, full screen', () => {
+    flagsMock.presentationEnabled = true;
     renderEditor({ initialStatus: 'pending_review', initialRevisionStatus: 'pending_review' });
     const link = screen.getByTestId('use-in-class-button');
     expect(link.textContent).toBe('Usar en clase');
     expect(link.getAttribute('href')).toBe('/es/ingles/actividades/act-1/presentar');
-    // BUGFIX: `presentar` is a full top-level page, never a window the desk
-    // manager opens — `target="_top"` escapes to the real tab whether this
-    // editor is itself embedded in a window or not, instead of navigating
-    // this editor's own iframe to a trapped, frozen presentation. No
-    // `data-desk-window-open` either: that attribute is read only by the
-    // HOST document's own click listener, a different document when this
-    // editor is embedded, so it never did anything useful here.
     expect(link.getAttribute('target')).toBe('_top');
-    expect(link.hasAttribute('data-desk-window-open')).toBe(false);
     expect(screen.queryByTestId('submit-for-review-button')).toBeNull();
   });
 
@@ -1605,9 +1686,14 @@ describe('ActivityEditorIsland — one primary action per state', () => {
     expect(screen.getByTestId('submit-for-review-dialog')).toBeTruthy();
   });
 
-  it('localizes "Usar en clase" and "Compartir" to English', () => {
+  // "Usar en clase" never renders while the presentation icon stays hidden
+  // (PRESENTATION_ENABLED) — and this state shows no primary action at all
+  // (see the dedicated test above), in English too.
+  it('localizes "Compartir" to English, and still shows no primary action for the hidden "Usar en clase" state', () => {
     renderEditor({ lang: 'en', initialStatus: 'pending_review', initialRevisionStatus: 'pending_review' });
-    expect(screen.getByTestId('use-in-class-button').textContent).toBe('Use in class');
+    expect(screen.queryByTestId('use-in-class-button')).toBeNull();
+    expect(screen.queryByTestId('submit-for-review-button')).toBeNull();
+    expect(screen.getByTestId('activity-status-badge').textContent).toContain('In review');
   });
 });
 
@@ -1806,43 +1892,60 @@ describe('ActivityEditorIsland — submit for review', () => {
 });
 
 describe('ActivityEditorIsland — "Ver como presentación" overlay (worksheet zoom tour, sprint week 3)', () => {
-  it('opens a full-screen presentation of the CURRENT draft state, unsaved changes included', () => {
-    renderEditor({ initialTitle: 'Título guardado' });
-    expect(screen.queryByTestId('presentation-viewport')).toBeNull();
-
-    // An unsaved title edit — the overlay must reflect THIS, not whatever
-    // was last saved.
-    fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'Título sin guardar' } });
-
-    fireEvent.click(screen.getByTestId('view-as-presentation-button'));
-    expect(screen.getByTestId('presentation-viewport')).toBeTruthy();
-    expect(screen.getByTestId('presentation-slide-cover').textContent).toContain('Título sin guardar');
-  });
-
-  it('presents the current worksheet/quiz blocks, including a worksheet zone (reusing the SAME island the real route mounts)', () => {
-    renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_ZONE] });
-    fireEvent.click(screen.getByTestId('view-as-presentation-button'));
-    fireEvent.click(screen.getByTestId('presentation-next'));
-    expect(screen.getByTestId('presentation-worksheet-viewport')).toBeTruthy();
-  });
-
-  it('closes on Escape and returns focus to the button that opened it', () => {
+  it('has no trigger to open it while PRESENTATION_ENABLED is false (owner decision 2026-10-31)', () => {
     renderEditor();
-    const trigger = screen.getByTestId('view-as-presentation-button');
-    fireEvent.click(trigger);
-    expect(screen.getByTestId('presentation-viewport')).toBeTruthy();
-
-    fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.queryByTestId('presentation-viewport')).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(screen.queryByTestId('view-as-presentation-button')).toBeNull();
   });
 
-  it('closes via the overlay\'s own exit control too (rendered as a button, not a navigation link)', () => {
-    renderEditor();
-    fireEvent.click(screen.getByTestId('view-as-presentation-button'));
-    expect(screen.queryByRole('link', { name: 'Salir' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Salir' }));
-    expect(screen.queryByTestId('presentation-viewport')).toBeNull();
+  // `PRESENTATION_ENABLED` (`flags.ts`): the trigger itself is hidden
+  // (proven above), but the overlay it opens — `PresentationIsland` and
+  // the `showPresentationPreview` state driving it — stays intact and
+  // tested, just unreachable from the UI. Flipping this live getter back to
+  // `true` here (and only here) re-exposes the SAME trigger these tests
+  // already covered, so this behaviour never goes untested.
+  describe('while PRESENTATION_ENABLED is true', () => {
+    beforeEach(() => {
+      flagsMock.presentationEnabled = true;
+    });
+
+    it('opens a full-screen presentation of the CURRENT draft state, unsaved changes included', () => {
+      renderEditor({ initialTitle: 'Título guardado' });
+      expect(screen.queryByTestId('presentation-viewport')).toBeNull();
+
+      // An unsaved title edit — the overlay must reflect THIS, not whatever
+      // was last saved.
+      fireEvent.change(screen.getByTestId('activity-title-input'), { target: { value: 'Título sin guardar' } });
+
+      fireEvent.click(screen.getByTestId('view-as-presentation-button'));
+      expect(screen.getByTestId('presentation-viewport')).toBeTruthy();
+      expect(screen.getByTestId('presentation-slide-cover').textContent).toContain('Título sin guardar');
+    });
+
+    it('presents the current worksheet/quiz blocks, including a worksheet zone (reusing the SAME island the real route mounts)', () => {
+      renderEditor({ initialBlocks: [WORKSHEET_BLOCK_WITH_ZONE] });
+      fireEvent.click(screen.getByTestId('view-as-presentation-button'));
+      fireEvent.click(screen.getByTestId('presentation-next'));
+      expect(screen.getByTestId('presentation-worksheet-viewport')).toBeTruthy();
+    });
+
+    it('closes on Escape and returns focus to the button that opened it', () => {
+      renderEditor();
+      const trigger = screen.getByTestId('view-as-presentation-button');
+      fireEvent.click(trigger);
+      expect(screen.getByTestId('presentation-viewport')).toBeTruthy();
+
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(screen.queryByTestId('presentation-viewport')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    });
+
+    it('closes via the overlay\'s own exit control too (rendered as a button, not a navigation link)', () => {
+      renderEditor();
+      fireEvent.click(screen.getByTestId('view-as-presentation-button'));
+      expect(screen.queryByRole('link', { name: 'Salir' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Salir' }));
+      expect(screen.queryByTestId('presentation-viewport')).toBeNull();
+    });
   });
 });
 
