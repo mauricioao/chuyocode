@@ -31,7 +31,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { BlockBackground, QuizBlock, QuizTemplate } from '@/lib/activities/blocks';
+import type { BlockBackground, PromptImageRef, QuizBlock, QuizTemplate } from '@/lib/activities/blocks';
 import { check, type GradeResult } from '@/lib/exerciseGrading';
 import type { Lang } from '@/lib/i18n';
 import type { ExerciseResponse, Payload } from '@/lib/exercisePayload';
@@ -78,6 +78,13 @@ export interface QuizLivePreviewProps {
   /** The block's own decorative background (plantillas: fondo, `blocks.ts`'s own `BlockBackground`) — painted by the inner `ActivityStage` via `ActivityPreviewFrame`. `undefined` keeps its plain grey canvas. */
   background?: BlockBackground;
   /**
+   * The block's own per-question context images (`QuizBlock.promptImages`),
+   * keyed by slot id — "Elegir la respuesta" shows each question's image
+   * beside its options, so the preview must carry them like the real
+   * player's block does. `undefined` = none.
+   */
+  promptImages?: Record<string, PromptImageRef>;
+  /**
    * The REAL activity title and level, exactly as the student's own window
    * shows them (`[id].astro`'s own `levelChip`) — owner audit §c: this
    * preview is "try it as a learner would", so its own chrome should read
@@ -100,6 +107,7 @@ export default function QuizLivePreview({
   payload,
   template,
   background,
+  promptImages,
   activityTitle,
   activityLevelChip,
 }: QuizLivePreviewProps) {
@@ -124,7 +132,13 @@ export default function QuizLivePreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, template]);
 
-  const block: QuizBlock = { id: `${blockId}-preview`, type: 'quiz', payload, ...(template ? { template } : {}) };
+  const block: QuizBlock = {
+    id: `${blockId}-preview`,
+    type: 'quiz',
+    payload,
+    ...(template ? { template } : {}),
+    ...(promptImages ? { promptImages } : {}),
+  };
   const frameTitle = activityTitle && activityTitle.trim() !== '' ? activityTitle : t.previewTitle;
 
   // NEVER THE GENERIC BÁSICO LAYOUT FOR A MOLDED BLOCK (T1 decision,

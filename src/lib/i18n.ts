@@ -488,6 +488,10 @@ export const UI_LABELS = {
           title: 'Ordenar por grupos',
           description: 'Arrastra cada elemento a su grupo correcto.',
         },
+        choose: {
+          title: 'Elegir la respuesta',
+          description: 'Una oración con su imagen y opciones grandes: elige la correcta.',
+        },
         createError: 'No se pudo crear la actividad. Inténtalo de nuevo.',
       },
       editor: {
@@ -601,6 +605,8 @@ export const UI_LABELS = {
         incompleteQuizNoAnswer: 'Escribe la respuesta de esta pregunta.',
         incompleteQuizTooFewOptions: 'Agrega al menos dos opciones a esta pregunta.',
         incompleteQuizAnswerNotInPool: 'Marca cuál de las opciones es la correcta.',
+        incompleteChooseNoSentence: 'Escribe la oración de esta pregunta.',
+        incompleteChooseNoCorrectOption: 'Escribe la respuesta correcta en la primera opción.',
         unsavedModalTitle: 'La actividad tiene cambios sin guardar',
         unsavedModalSaveAndLeave: 'Guardar y salir',
         unsavedModalLeaveWithoutSaving: 'Salir sin guardar',
@@ -2303,6 +2309,10 @@ export const UI_LABELS = {
           title: 'Group sort',
           description: 'Drag each item into its correct group.',
         },
+        choose: {
+          title: 'Choose the answer',
+          description: 'A sentence with its picture and big options: pick the right one.',
+        },
         createError: 'Could not create the activity. Try again.',
       },
       editor: {
@@ -2387,6 +2397,8 @@ export const UI_LABELS = {
         incompleteQuizNoAnswer: 'Type the answer for this question.',
         incompleteQuizTooFewOptions: 'Add at least two options to this question.',
         incompleteQuizAnswerNotInPool: 'Mark which option is the correct one.',
+        incompleteChooseNoSentence: 'Write the sentence for this question.',
+        incompleteChooseNoCorrectOption: 'Write the correct answer in the first option.',
         incompleteTooFewOptions: 'Add at least two options to this zone.',
         incompleteAnswerNotInOptions: 'Mark which option is the correct one.',
         unsavedModalTitle: 'This activity has unsaved changes',

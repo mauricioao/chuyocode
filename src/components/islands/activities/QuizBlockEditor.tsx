@@ -109,9 +109,21 @@ import MatchPairsEditor, { type MatchPair } from './MatchPairsEditor';
 import ReorderEditor, { type ReorderSentence } from './ReorderEditor';
 import ClozeEditor, { type ClozeSentenceInput } from './ClozeEditor';
 import GroupSortEditor from './GroupSortEditor';
+import ChooseEditor from './ChooseEditor';
 import { isMultilinePaste } from '@/lib/activities/pasteLines';
 import { parseMatchPairsPaste, type MatchPastePair } from '@/lib/activities/pasteMatchPairs';
 import type { GroupSortPasteOp } from '@/lib/activities/pasteGroupSort';
+import type { ChoosePasteRow } from '@/lib/activities/pasteChoose';
+import {
+  addChooseOption,
+  addChooseQuestion,
+  deriveChooseRows,
+  pasteChooseRows,
+  removeChooseOption,
+  removeChooseQuestion,
+  setChooseOptionText,
+} from '@/lib/activities/chooseAuthoring';
+import { deriveChooseQuestions } from '@/lib/activities/chooseQuestion';
 import {
   applyClozeSentenceText,
   applyDistractorsText,
@@ -554,6 +566,7 @@ export default function QuizBlockEditor({
   const isReorder = template === 'reorder';
   const isCloze = template === 'cloze';
   const isGroupSort = template === 'groupsort';
+  const isChoose = template === 'choose';
   // Bug S0 (owner audit, `PROPUESTA-PLANTILLAS-2026-10-23.md` §e): a
   // duplicated/copied block's payload keeps whatever pool name its slots
   // were ACTUALLY given when they were created — minting a fresh name from
@@ -776,12 +789,13 @@ export default function QuizBlockEditor({
   function handleContainerKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key !== 'Enter' || !(event.ctrlKey || event.metaKey)) return;
     event.preventDefault();
-    // `cloze`/`groupsort` own their rows through their own commits — a plain
-    // `addQuestion` row would be an invisible stray slot in those blocks.
+    // `cloze`/`groupsort`/`choose` own their rows through their own commits —
+    // a plain `addQuestion` row would be a stray text slot in those blocks.
     if (isCloze) addClozeRow();
     else if (isGroupSort) {
       if (groupSortRows.length < MAX_GROUPSORT_GROUPS) addGroupSortRow();
-    } else addQuestion();
+    } else if (isChoose) addChooseRow();
+    else addQuestion();
   }
 
   const cardNodeRefs = useRef<Record<string, HTMLLIElement | null>>({});
@@ -1115,6 +1129,65 @@ export default function QuizBlockEditor({
     />
   );
 
+  // CHOOSE AUTHORING ("Elegir la respuesta", same posture as `groupSortRows`
+  // above): one question card per `row` + Básico multiple-choice `Slot`, with
+  // its own `${slotId}-options` pool — `chooseAuthoring.ts`'s own pure
+  // commits keep `answer[0]` on the first option. The ready line counts what
+  // the player would actually play (`deriveChooseQuestions`, the live draft).
+  const chooseRows = isChoose ? deriveChooseRows(draft) : [];
+  const chooseReadyCount = isChoose ? deriveChooseQuestions(payload).length : 0;
+
+  function addChooseRow() {
+    const rowId = nextId('row');
+    const slotId = nextId('slot');
+    commit(addChooseQuestion(draft, rowId, slotId, nextId));
+    onSelectSlot(slotId);
+  }
+
+  function removeChooseRow(rowId: string, slotId: string) {
+    commit(removeChooseQuestion(draft, rowId));
+    if (selectedSlotId === slotId) onSelectSlot(null);
+  }
+
+  // The empty-list example card's own first keystroke — see `addExampleQuestionRow`'s own header for the full reasoning.
+  function addExampleChooseQuestion(value: string) {
+    const rowId = nextId('row');
+    const slotId = nextId('slot');
+    commit(addChooseQuestion(draft, rowId, slotId, nextId, { sentence: value }));
+    onSelectSlot(slotId);
+  }
+
+  // Bulk paste (owner spec N5): `oración | correcta | otra | otra`, one
+  // question per line (`pasteChoose.ts`) — ONE working draft, ONE commit.
+  function pasteChooseQuestions(fromSlotId: string | null, rows: ChoosePasteRow[]) {
+    commit(pasteChooseRows(draft, fromSlotId, rows, nextId));
+  }
+
+  const chooseColumn = (
+    <ChooseEditor
+      blockId={blockId}
+      lang={lang}
+      questions={chooseRows}
+      playable={previewHasContent}
+      readyCount={chooseReadyCount}
+      focusSlotId={selectedSlotId}
+      incompleteSlotId={incompleteSlotId}
+      incompleteMessage={incompleteMessage}
+      promptImages={promptImages}
+      onPromptImageChange={imagesEnabled ? setPromptImage : undefined}
+      onSentenceChange={(slotId, sentence) => commit(setRowLabel(draft, slotId, sentence))}
+      onOptionChange={(slotId, itemId, text) => commit(setChooseOptionText(draft, slotId, itemId, text))}
+      onAddOption={(slotId) => commit(addChooseOption(draft, slotId, nextId))}
+      onRemoveOption={(slotId, itemId) => commit(removeChooseOption(draft, slotId, itemId))}
+      onExplanationChange={(slotId, explanation) => commit(setSlotExplanation(draft, slotId, explanation))}
+      onAdd={addChooseRow}
+      onRemove={removeChooseRow}
+      onPasteQuestions={pasteChooseQuestions}
+      onExampleChange={addExampleChooseQuestion}
+      headerAction={changeMoldButton}
+    />
+  );
+
   // Bulk paste (owner spec N5 / R3): reuses `parseMatchPairsPaste` (the SAME
   // parser `match`'s own ghost row uses, per owner spec — tab/`=`/dash/`: `
   // separators) and the shared `pasteQuestionRows` commit above. `feedback`
@@ -1327,6 +1400,7 @@ export default function QuizBlockEditor({
         payload={debouncedPayload}
         template={template}
         background={background}
+        promptImages={promptImages}
         activityTitle={activityTitle}
         activityLevelChip={activityLevelChip}
       />
@@ -1334,7 +1408,7 @@ export default function QuizBlockEditor({
   ) : null;
 
   // TEMPLATE EDITORS (owner report: "no va a juego con los sombreados y
-  // estilos de nuestro escritorio"): the four templates share one desk-native
+  // estilos de nuestro escritorio"): the five templates share one desk-native
   // work area — the authoring sheet beside the live preview's stage card,
   // stacked on phones (no tabs: both are short enough to scroll through) —
   // see `TemplateEditorKit.tsx`'s own header. Básico keeps the layout below.
@@ -1346,7 +1420,9 @@ export default function QuizBlockEditor({
         ? clozeColumn
         : isGroupSort
           ? groupSortColumn
-          : null;
+          : isChoose
+            ? chooseColumn
+            : null;
   if (templateColumn) {
     return (
       <>

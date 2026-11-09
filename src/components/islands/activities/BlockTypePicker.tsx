@@ -42,6 +42,7 @@ import { ArrowsLeftRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowsLeftRi
 import { ArrowsDownUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowsDownUp';
 import { BracketsSquareIcon } from '@phosphor-icons/react/dist/ssr/BracketsSquare';
 import { SquaresFourIcon } from '@phosphor-icons/react/dist/ssr/SquaresFour';
+import { ListNumbersIcon } from '@phosphor-icons/react/dist/ssr/ListNumbers';
 import { CircleNotchIcon } from '@phosphor-icons/react/dist/ssr/CircleNotch';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
@@ -56,7 +57,7 @@ import { VARIOS_JUEGOS_ENABLED } from '../../../lib/activities/flags';
  */
 const ILLUSTRATION_COLUMN = 'w-28 sm:w-32';
 
-export type BlockTypeCard = 'worksheet' | 'questions' | 'match' | 'reorder' | 'cloze' | 'groupsort';
+export type BlockTypeCard = 'worksheet' | 'questions' | 'match' | 'reorder' | 'cloze' | 'groupsort' | 'choose';
 
 export interface BlockTypePickerProps {
   lang: Lang;
@@ -66,6 +67,7 @@ export interface BlockTypePickerProps {
   onSelectReorder: () => void;
   onSelectCloze: () => void;
   onSelectGroupSort: () => void;
+  onSelectChoose: () => void;
   /** The card currently creating the activity, if any — see the file header. `null`/omitted: the picker is fully idle. */
   busyCard?: BlockTypeCard | null;
 }
@@ -228,6 +230,33 @@ function GroupSortCardPreview() {
   );
 }
 
+/**
+ * "Elegir la respuesta" card's tiny result preview: a short line with one
+ * blank above a row of three option tiles, the first one lifting on hover
+ * (`group-hover:`) — hinting at "pick the right option" without a real
+ * click, same restraint `ClozeCardPreview`'s own sliding tile uses.
+ */
+function ChooseCardPreview() {
+  return (
+    <div
+      aria-hidden="true"
+      data-testid="card-preview-choose"
+      className="mt-2 flex h-11 w-full flex-col justify-center gap-1.5 rounded-md border border-border bg-muted/40 px-2.5"
+    >
+      <span className="flex items-center gap-1">
+        <span className="h-1.5 w-4 rounded-full bg-foreground/15" />
+        <span className="h-1.5 w-5 border-b-2 border-primary/50" />
+        <span className="h-1.5 w-7 rounded-full bg-foreground/15" />
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="h-3 flex-1 rounded-sm bg-primary/40 transition-transform duration-500 motion-safe:group-hover:-translate-y-0.5" />
+        <span className="h-3 flex-1 rounded-sm bg-foreground/15" />
+        <span className="h-3 flex-1 rounded-sm bg-foreground/15" />
+      </span>
+    </div>
+  );
+}
+
 export default function BlockTypePicker({
   lang,
   onSelectWorksheet,
@@ -236,6 +265,7 @@ export default function BlockTypePicker({
   onSelectReorder,
   onSelectCloze,
   onSelectGroupSort,
+  onSelectChoose,
   busyCard = null,
 }: BlockTypePickerProps) {
   const t = UI_LABELS[lang].activities.start;
@@ -395,6 +425,31 @@ export default function BlockTypePicker({
             <div className="min-w-0 flex-1">
               <CardTitle className="text-base font-semibold">{t.groupsort.title}</CardTitle>
               <CardDescription className="mt-1">{t.groupsort.description}</CardDescription>
+            </div>
+          </CardContent>
+        </Card>
+      </button>
+
+      <button
+        type="button"
+        data-testid="picker-choose"
+        onClick={onSelectChoose}
+        disabled={disabled}
+        aria-busy={busyCard === 'choose'}
+        className={cn(
+          'group text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-xl disabled:cursor-default',
+          disabled && busyCard !== 'choose' && 'opacity-50',
+        )}
+      >
+        <Card className="h-full ring-1 ring-border transition-theme duration-theme hover:ring-primary">
+          <CardContent className="flex items-center gap-4">
+            <div className={cn('flex shrink-0 flex-col items-center gap-1', ILLUSTRATION_COLUMN)}>
+              <CardIcon busy={busyCard === 'choose'} Icon={ListNumbersIcon} />
+              <ChooseCardPreview />
+            </div>
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-base font-semibold">{t.choose.title}</CardTitle>
+              <CardDescription className="mt-1">{t.choose.description}</CardDescription>
             </div>
           </CardContent>
         </Card>

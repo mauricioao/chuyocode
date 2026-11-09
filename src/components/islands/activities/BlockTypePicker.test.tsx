@@ -11,6 +11,7 @@ function noopHandlers() {
     onSelectReorder: vi.fn(),
     onSelectCloze: vi.fn(),
     onSelectGroupSort: vi.fn(),
+    onSelectChoose: vi.fn(),
   };
 }
 
@@ -20,6 +21,7 @@ const ALL_CARDS = [
   'picker-reorder',
   'picker-cloze',
   'picker-groupsort',
+  'picker-choose',
 ];
 
 describe('BlockTypePicker', () => {
@@ -90,6 +92,28 @@ describe('BlockTypePicker', () => {
     render(<BlockTypePicker lang="es" {...handlers} />);
     fireEvent.click(screen.getByTestId('picker-groupsort'));
     expect(handlers.onSelectGroupSort).toHaveBeenCalledTimes(1);
+  });
+
+  // "Elegir la respuesta" (`template: 'choose'`): its own card, title and
+  // one-line description, with the same tiny preview every card carries.
+  it('renders the "Elegir la respuesta" card, with its description and tiny preview', () => {
+    render(<BlockTypePicker lang="es" {...noopHandlers()} />);
+    const card = screen.getByTestId('picker-choose');
+    expect(card.textContent).toContain('Elegir la respuesta');
+    expect(card.textContent).toContain('Una oración con su imagen y opciones grandes: elige la correcta.');
+    expect(screen.getByTestId('card-preview-choose').getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('renders the "Choose the answer" card in English', () => {
+    render(<BlockTypePicker lang="en" {...noopHandlers()} />);
+    expect(screen.getByTestId('picker-choose').textContent).toContain('Choose the answer');
+  });
+
+  it('calls onSelectChoose when the "Elegir la respuesta" card is chosen', () => {
+    const handlers = noopHandlers();
+    render(<BlockTypePicker lang="es" {...handlers} />);
+    fireEvent.click(screen.getByTestId('picker-choose'));
+    expect(handlers.onSelectChoose).toHaveBeenCalledTimes(1);
   });
 
   it('calls onSelectWorksheet when the worksheet card is chosen', () => {

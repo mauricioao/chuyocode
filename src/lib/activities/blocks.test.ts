@@ -229,6 +229,58 @@ describe('parseBlocks — quiz block: template (build item 2, template plumbing)
     expect(findIncompleteBlock(draft!)).toEqual({ blockId: 'b1', zoneId: 'q1', reason: 'quiz_too_few_options' });
   });
 
+  // "Elegir la respuesta" only plays a question once it has a sentence, two
+  // options WITH TEXT and a correct one among them (`deriveChooseQuestions`)
+  // — the editor always keeps two option fields, so an empty field must not
+  // count as an option, and the empty sentence gets its own plain message.
+  describe('a "choose" question the player would skip is incomplete', () => {
+    function chooseDraft(label: string, texts: string[]): Block[] {
+      const items = texts.map((text, i) => ({ id: `q1-${i}`, text }));
+      return parseBlocks(
+        [
+          {
+            id: 'b1',
+            type: 'quiz',
+            template: 'choose',
+            payload: {
+              pools: { 'q1-options': items },
+              slots: [{ id: 'q1', label, input: 'choice', pool: 'q1-options', answer: ['q1-0'] }],
+            },
+          },
+        ],
+        'draft',
+      ) as Block[];
+    }
+
+    it('an empty sentence', () => {
+      expect(findIncompleteBlock(chooseDraft('   ', ['goes', 'go']))).toEqual({
+        blockId: 'b1',
+        zoneId: 'q1',
+        reason: 'choose_no_sentence',
+      });
+    });
+
+    it('fewer than two options with text', () => {
+      expect(findIncompleteBlock(chooseDraft('She ___ to school.', ['goes', '  ']))).toEqual({
+        blockId: 'b1',
+        zoneId: 'q1',
+        reason: 'quiz_too_few_options',
+      });
+    });
+
+    it('an empty correct (first) option', () => {
+      expect(findIncompleteBlock(chooseDraft('She ___ to school.', ['', 'go', 'going']))).toEqual({
+        blockId: 'b1',
+        zoneId: 'q1',
+        reason: 'choose_no_correct_option',
+      });
+    });
+
+    it('a complete question passes', () => {
+      expect(findIncompleteBlock(chooseDraft('She ___ to school.', ['goes', 'go', '']))).toBeNull();
+    });
+  });
+
   it('rejects a non-string template in submit mode, ignores it in draft mode', () => {
     expect(parseBlocks([quizBlock({ template: 42 })])).toBeNull();
     const draft = parseBlocks([quizBlock({ template: 42 })], 'draft');

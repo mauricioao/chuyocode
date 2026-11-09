@@ -1,7 +1,7 @@
 /**
  * TemplateEditorKit — the shared pieces every template editor
- * (`MatchPairsEditor`, `ReorderEditor`, `ClozeEditor`, `GroupSortEditor`) is
- * built from, so the four stay visually identical and native to the desk
+ * (`MatchPairsEditor`, `ReorderEditor`, `ClozeEditor`, `GroupSortEditor`,
+ * `ChooseEditor`) is built from, so the five stay visually identical and native to the desk
  * (owner report: "no va a juego con los sombreados y estilos de nuestro
  * escritorio").
  *
@@ -12,7 +12,8 @@
  *   instruction.
  * - {@link TemplateGroup} + {@link TemplateRow} + {@link TemplateField}: an
  *   iOS "grouped list" — one white container, hairline rows, borderless
- *   fields. {@link AddRow} is the group's own last row.
+ *   fields ({@link TemplateTextArea} for a longer, wrapping text). {@link
+ *   AddRow} is the group's own last row.
  * - {@link RowRemoveButton}: the round "×" that shows on row hover/focus.
  * - {@link StatusNote} / {@link Footnote}: the small lines under a group.
  * - {@link Chip} + {@link ChipInput}: removable word chips and the inline
@@ -198,7 +199,7 @@ export function TemplateEditorLayout({
   );
 }
 
-export type SheetTone = 'sky' | 'violet' | 'yellow' | 'green';
+export type SheetTone = 'sky' | 'violet' | 'yellow' | 'green' | 'cobalt';
 
 const ICON_CHIP_TONE: Record<SheetTone, string> = {
   sky: 'bg-pop-sky-deep text-white',
@@ -209,6 +210,10 @@ const ICON_CHIP_TONE: Record<SheetTone, string> = {
   // global.css's own comment) — white is unreadable on it (~1.46:1), so this
   // reaches for `-mint-deep` instead, same posture as `sky` above.
   green: 'bg-pop-mint-deep text-white',
+  // "Elegir la respuesta" (the fifth template, every pop accent above already
+  // taken): the option palette's own cobalt (`--color-tile-1`, white text
+  // 6.27:1 — `global.css`), the colour its first option card plays in.
+  cobalt: 'bg-tile-1 text-white',
 };
 
 export function SheetHeader({
@@ -325,6 +330,16 @@ export function TemplateRow({
  */
 export function TemplateField({ className, ...props }: React.ComponentProps<'input'>) {
   return <input type="text" {...props} className={cn('template-field', className)} />;
+}
+
+/**
+ * {@link TemplateField} for a longer text that wraps instead of scrolling
+ * sideways (e.g. "Elegir la respuesta"'s "¿Por qué?"): the same borderless
+ * look, one line at rest, growing with its text (`global.css`'s
+ * `.template-field-multiline`). Every caller passes its own `aria-label`.
+ */
+export function TemplateTextArea({ className, ...props }: React.ComponentProps<'textarea'>) {
+  return <textarea rows={1} {...props} className={cn('template-field template-field-multiline', className)} />;
 }
 
 /** Where focus should land after the item holding `button` is removed by keyboard: the next item's first control, else the previous one's. */

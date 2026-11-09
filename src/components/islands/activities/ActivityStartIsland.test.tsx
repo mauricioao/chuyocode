@@ -195,6 +195,26 @@ describe('ActivityStartIsland', () => {
     ]);
   });
 
+  it('creates an activity with one empty, "choose"-templated quiz block, and navigates to its editor', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'new-activity-6' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const navigate = vi.fn();
+
+    render(<ActivityStartIsland lang="es" navigate={navigate} />);
+    fireEvent.click(screen.getByTestId('picker-choose'));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/es/crear/new-activity-6'));
+
+    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
+    const body = JSON.parse(init.body);
+    expect(body.blocks).toEqual([
+      expect.objectContaining({ type: 'quiz', template: 'choose', payload: { pools: {}, slots: [] } }),
+    ]);
+  });
+
   it('marks the groupsort card busy while its request is in flight', async () => {
     let resolveFetch!: (value: unknown) => void;
     const fetchMock = vi.fn(

@@ -21,6 +21,7 @@ import { ArrowsLeftRightIcon } from '@phosphor-icons/react/dist/ssr/ArrowsLeftRi
 import { ArrowsDownUpIcon } from '@phosphor-icons/react/dist/ssr/ArrowsDownUp';
 import { BracketsSquareIcon } from '@phosphor-icons/react/dist/ssr/BracketsSquare';
 import { SquaresFourIcon } from '@phosphor-icons/react/dist/ssr/SquaresFour';
+import { ListNumbersIcon } from '@phosphor-icons/react/dist/ssr/ListNumbers';
 import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
 import type { Icon } from '@phosphor-icons/react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -77,6 +78,8 @@ const MOLD_ICON: Record<string, Icon> = {
   reorder: ArrowsDownUpIcon,
   cloze: BracketsSquareIcon,
   groupsort: SquaresFourIcon,
+  // Same icon the game-mode switcher gives "Elegir la respuesta" (`QuizGameModeSwitcher.tsx`).
+  choose: ListNumbersIcon,
 };
 
 /** This dialog's own internal/testid key for a mold — `undefined` ("Varios juegos") reads as `'basic'`. */

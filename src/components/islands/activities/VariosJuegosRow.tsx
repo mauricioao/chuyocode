@@ -92,7 +92,9 @@ type QuestionImageStatus = { kind: 'idle' } | { kind: 'uploading' } | { kind: 'e
 
 /**
  * Per-question "Agregar imagen" / thumbnail+"Quitar imagen" (owner decision
- * 2026-10-16) — a small, self-contained uploader, deliberately NOT
+ * 2026-10-16) — exported so "Elegir la respuesta"'s own question cards
+ * (`ChooseEditor.tsx`) reuse this exact field; `testIdPrefix` only renames
+ * its test ids there. A small, self-contained uploader, deliberately NOT
  * `uploadTask.ts`'s multi-page state machine (`WorksheetUploader.tsx`'s
  * own): there is at most one image, no PDF, no stitching, so a single
  * idle/uploading/error state is the whole story. The actual convert+upload
@@ -103,16 +105,18 @@ type QuestionImageStatus = { kind: 'idle' } | { kind: 'uploading' } | { kind: 'e
  * (`@lib/activities/paths`'s own "KIND PREFIX" header) — never a worksheet
  * image anywhere downstream.
  */
-function QuestionImageField({
+export function QuestionImageField({
   lang,
   slotId,
   image,
   onChange,
+  testIdPrefix = 'varios-question-image',
 }: {
   lang: string;
   slotId: string;
   image: PromptImageRef | undefined;
   onChange: (image: PromptImageRef | undefined) => void;
+  testIdPrefix?: string;
 }) {
   const localeKey: Lang = lang === 'en' ? 'en' : 'es';
   const t = UI_LABELS[localeKey].activities.questionImage;
@@ -136,13 +140,13 @@ function QuestionImageField({
   }
 
   return (
-    <div className="flex flex-col gap-1.5" data-testid={`varios-question-image-${slotId}`}>
+    <div className="flex flex-col gap-1.5" data-testid={`${testIdPrefix}-${slotId}`}>
       <input
         ref={inputRef}
         type="file"
         accept="image/jpeg,image/png,image/webp"
         className="sr-only"
-        data-testid={`varios-question-image-input-${slotId}`}
+        data-testid={`${testIdPrefix}-input-${slotId}`}
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
@@ -154,13 +158,13 @@ function QuestionImageField({
           <FadeImage
             src={imagePreviewUrl(image.path)}
             alt=""
-            data-testid={`varios-question-image-thumb-${slotId}`}
+            data-testid={`${testIdPrefix}-thumb-${slotId}`}
             className="h-14 w-14 rounded-md border border-border object-cover"
             placeholderClassName="h-14 w-14 rounded-md border border-border"
           />
           <button
             type="button"
-            data-testid={`varios-question-image-remove-${slotId}`}
+            data-testid={`${testIdPrefix}-remove-${slotId}`}
             onClick={() => onChange(undefined)}
             className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive"
           >
@@ -171,7 +175,7 @@ function QuestionImageField({
       ) : (
         <button
           type="button"
-          data-testid={`varios-question-image-add-${slotId}`}
+          data-testid={`${testIdPrefix}-add-${slotId}`}
           disabled={status.kind === 'uploading'}
           onClick={() => inputRef.current?.click()}
           className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-accent-ink hover:underline disabled:opacity-50"
@@ -181,7 +185,7 @@ function QuestionImageField({
         </button>
       )}
       {status.kind === 'error' && (
-        <p data-testid={`varios-question-image-error-${slotId}`} className="text-xs text-destructive">
+        <p data-testid={`${testIdPrefix}-error-${slotId}`} className="text-xs text-destructive">
           {status.message}
         </p>
       )}

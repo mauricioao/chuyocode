@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImageBrokenIcon } from '@phosphor-icons/react/dist/ssr/ImageBroken';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +40,17 @@ export function FadeImage({
 }: FadeImageProps) {
   const [loaded, setLoaded] = useState(false);
   const [broken, setBroken] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // A server-rendered <img> may finish loading BEFORE hydration attaches
+  // `onLoad` — that event never comes again, so read the element's own state
+  // once on mount instead of leaving it invisible at opacity-0. Only a
+  // decoded image with a size counts: `naturalWidth` 0 is also what an SVG
+  // without an intrinsic size reports, so it is never taken as "broken".
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img?.complete && img.naturalWidth > 0) setLoaded(true);
+  }, []);
 
   if (broken) {
     return (
@@ -59,6 +70,7 @@ export function FadeImage({
 
   return (
     <img
+      ref={imgRef}
       src={src}
       alt={alt}
       data-testid={testId}

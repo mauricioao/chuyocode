@@ -133,13 +133,14 @@ function buildClozePayload(): Payload {
 const CLOZE_PAYLOAD = buildClozePayload();
 
 describe('conversionOptions', () => {
-  it('lists exactly the 5 molds, in gallery order', () => {
+  it('lists exactly the 6 molds, in gallery order', () => {
     const opts = conversionOptions(quizBlock(undefined, BASIC_TEXT_PAYLOAD));
     expect(opts.map((o) => o.template)).toEqual(MOLDS);
+    expect(MOLDS).toEqual([undefined, 'match', 'reorder', 'cloze', 'groupsort', 'choose']);
   });
 
   it('marks exactly one option "current", matching the block\'s own template', () => {
-    for (const template of [undefined, 'match', 'reorder', 'cloze', 'groupsort'] as const) {
+    for (const template of [undefined, 'match', 'reorder', 'cloze', 'groupsort', 'choose'] as const) {
       const opts = conversionOptions(quizBlock(template, EMPTY_PAYLOAD));
       const current = opts.filter((o) => o.current);
       expect(current).toHaveLength(1);
@@ -229,7 +230,7 @@ describe('convertBlock — no-op', () => {
 });
 
 describe('convertBlock — empty block converts losslessly to any mold', () => {
-  it.each([undefined, 'match', 'reorder', 'cloze', 'groupsort'] as const)('from %s', (from) => {
+  it.each([undefined, 'match', 'reorder', 'cloze', 'groupsort', 'choose'] as const)('from %s', (from) => {
     for (const to of MOLDS) {
       if (to === from) continue;
       const result = convertBlock(quizBlock(from, EMPTY_PAYLOAD), to);

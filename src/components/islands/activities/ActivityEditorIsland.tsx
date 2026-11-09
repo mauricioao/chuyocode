@@ -964,6 +964,19 @@ export default function ActivityEditorIsland({
     setActiveBlockId(newBlock.id);
   }, [blocks, changeBlocks, setActiveBlockId]);
 
+  // "Elegir la respuesta" (choose): same shape as GroupSort above, just
+  // tagged with the `'choose'` template.
+  const handleChooseChosen = useCallback(() => {
+    const newBlock: Block = {
+      id: crypto.randomUUID(),
+      type: 'quiz',
+      payload: { pools: {}, slots: [] },
+      template: 'choose',
+    };
+    changeBlocks([...blocks, newBlock]);
+    setActiveBlockId(newBlock.id);
+  }, [blocks, changeBlocks, setActiveBlockId]);
+
   const handleUploadComplete = useCallback(
     (images: UploadedImage[]) => {
       // `WorksheetUploader` always hands back exactly ONE image now —
@@ -1006,6 +1019,8 @@ export default function ActivityEditorIsland({
     quiz_no_answer: 'incompleteQuizNoAnswer',
     quiz_too_few_options: 'incompleteQuizTooFewOptions',
     quiz_answer_not_in_pool: 'incompleteQuizAnswerNotInPool',
+    choose_no_sentence: 'incompleteChooseNoSentence',
+    choose_no_correct_option: 'incompleteChooseNoCorrectOption',
   } as const;
   const incompleteMessage = incompleteTarget ? t[INCOMPLETE_REASON_KEYS[incompleteTarget.reason]] : null;
 
@@ -1552,7 +1567,13 @@ export default function ActivityEditorIsland({
                   data-testid={`quiz-preview-cap-${block.id}`}
                   className={templateBlockActive ? 'mx-auto w-full lg:max-w-[calc(100cqh*1240/748)]' : undefined}
                 >
-                  <QuizLivePreview blockId={block.id} lang={lang} payload={block.payload} template={block.template} />
+                  <QuizLivePreview
+                    blockId={block.id}
+                    lang={lang}
+                    payload={block.payload}
+                    template={block.template}
+                    promptImages={block.promptImages}
+                  />
                 </div>
               );
             })}
@@ -1601,6 +1622,7 @@ export default function ActivityEditorIsland({
                 onSelectReorder={handleReorderChosen}
                 onSelectCloze={handleClozeChosen}
                 onSelectGroupSort={handleGroupSortChosen}
+                onSelectChoose={handleChooseChosen}
               />
             )}
 

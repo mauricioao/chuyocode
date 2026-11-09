@@ -145,6 +145,62 @@ function GroupSortHarness({ initialPayload }: { initialPayload: Payload }) {
   );
 }
 
+/**
+ * Same harness, authoring a `template: 'choose'` block ("Elegir la
+ * respuesta") — with `promptImages`/`imagesEnabled` wired like
+ * `BlockList.tsx`'s real mount, since every choose question carries its
+ * own optional context image. `onChange` sees every committed payload.
+ */
+function ChooseHarness({
+  initialPayload,
+  initialPromptImages,
+  incompleteSlotId,
+  incompleteMessage,
+  onChange,
+}: {
+  initialPayload: Payload;
+  initialPromptImages?: Record<string, PromptImageRef>;
+  incompleteSlotId?: string;
+  incompleteMessage?: string;
+  onChange?: (payload: Payload) => void;
+}) {
+  const [payload, setPayload] = useState<Payload>(initialPayload);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  const [promptImages, setPromptImages] = useState<Record<string, PromptImageRef> | undefined>(initialPromptImages);
+  return (
+    <QuizBlockEditor
+      blockId="b1"
+      lang="es"
+      payload={payload}
+      template="choose"
+      selectedSlotId={selectedSlotId}
+      onSelectSlot={setSelectedSlotId}
+      onPayloadChange={(nextPayload, nextPromptImages) => {
+        onChange?.(nextPayload);
+        setPayload(nextPayload);
+        setPromptImages(nextPromptImages);
+      }}
+      incompleteSlotId={incompleteSlotId}
+      incompleteMessage={incompleteMessage}
+      promptImages={promptImages}
+      imagesEnabled
+    />
+  );
+}
+
+/** One complete "Elegir la respuesta" question: three options, the first one correct. */
+const CHOOSE_ONE_PAYLOAD: Payload = {
+  pools: {
+    'q1-options': [
+      { id: 'q1-a', text: 'goes' },
+      { id: 'q1-b', text: 'go' },
+      { id: 'q1-c', text: 'going' },
+    ],
+  },
+  slots: [{ id: 'q1', label: 'She ___ to school every day.', input: 'choice', pool: 'q1-options', answer: ['q1-a'] }],
+  blocks: [{ kind: 'row', id: 'row-q1', slotId: 'q1' }],
+};
+
 const MATCH_NO_REPEAT_PAYLOAD: Payload = {
   pools: {},
   slots: [
@@ -1736,6 +1792,194 @@ describe('QuizBlockEditor — "Ordenar por grupos": paste a whole list (N5)', ()
   });
 });
 
+describe('QuizBlockEditor — "Elegir la respuesta" (choose authoring)', () => {
+  /** The slot id a `choose-sentence-<slotId>` field belongs to. */
+  function slotIdOf(sentence: HTMLElement): string {
+    return sentence.getAttribute('data-testid')!.replace('choose-sentence-', '');
+  }
+
+  function optionFields(slotId: string): HTMLInputElement[] {
+    return within(screen.getByTestId(`choose-question-${slotId}`)).getAllByTestId(/^choose-option-text-/) as HTMLInputElement[];
+  }
+
+  it('renders its own sheet in the shared template layout, under the mold name', () => {
+    render(<ChooseHarness initialPayload={CHOOSE_ONE_PAYLOAD} />);
+    const editor = within(screen.getByTestId('template-sheet-b1')).getByTestId('choose-editor-b1');
+    expect(editor.textContent).toContain('Elegir la respuesta');
+    expect(screen.queryByTestId('quiz-mobile-tabs-b1')).toBeNull();
+  });
+
+  it('typing into the empty-list example creates the first question, with two option fields', () => {
+    render(<ChooseHarness initialPayload={EMPTY_PAYLOAD} />);
+    const ghost = screen.getByTestId('choose-ghost-sentence-b1') as HTMLInputElement;
+    expect(ghost.getAttribute('placeholder')).toBe('She ___ to school every day.');
+
+    ghost.focus();
+    fireEvent.change(ghost, { target: { value: 'S' } });
+
+    expect(screen.queryByTestId('choose-ghost-sentence-b1')).toBeNull();
+    const [sentence] = screen.getAllByTestId(/^choose-sentence-/) as HTMLInputElement[];
+    expect(sentence!.value).toBe('S');
+    expect(document.activeElement).toBe(sentence);
+    expect(optionFields(slotIdOf(sentence!))).toHaveLength(2);
+  });
+
+  it('marks the FIRST option correct, with a ✓ and "Correcta", and never offers to remove it', () => {
+    render(<ChooseHarness initialPayload={CHOOSE_ONE_PAYLOAD} />);
+    const firstRow = screen.getByTestId('choose-option-row-q1-a');
+    expect(within(firstRow).getByTestId('choose-correct-q1').textContent).toContain('Correcta');
+    expect(within(firstRow).queryByTestId('choose-option-remove-q1-a')).toBeNull();
+
+    expect(within(screen.getByTestId('choose-option-row-q1-b')).queryByTestId('choose-correct-q1')).toBeNull();
+    expect(screen.getByTestId('choose-option-remove-q1-b')).toBeTruthy();
+    expect(screen.getByTestId('choose-option-remove-q1-c')).toBeTruthy();
+  });
+
+  it('"Agregar opción" adds options up to four, then goes away', () => {
+    render(<ChooseHarness initialPayload={CHOOSE_ONE_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('choose-add-option-q1'));
+
+    const options = optionFields('q1');
+    expect(options).toHaveLength(4);
+    expect(document.activeElement).toBe(options[3]);
+    expect(screen.queryByTestId('choose-add-option-q1')).toBeNull();
+  });
+
+  it('removing options stops at two: the last two have no remove button', () => {
+    render(<ChooseHarness initialPayload={CHOOSE_ONE_PAYLOAD} />);
+    fireEvent.click(screen.getByTestId('choose-option-remove-q1-c'));
+
+    expect(optionFields('q1').map((field) => field.value)).toEqual(['goes', 'go']);
+    expect(screen.queryAllByTestId(/^choose-option-remove-/)).toHaveLength(0);
+  });
+
+  it('stores a Básico multiple-choice question: a choice slot, its own pool, answer[0] = the first option', () => {
+    const onChange = vi.fn();
+    render(<ChooseHarness initialPayload={EMPTY_PAYLOAD} onChange={onChange} />);
+    fireEvent.change(screen.getByTestId('choose-ghost-sentence-b1'), { target: { value: 'She ___ to school.' } });
+    const slotId = slotIdOf(screen.getAllByTestId(/^choose-sentence-/)[0]!);
+    const [correct, other] = optionFields(slotId);
+    fireEvent.change(correct!, { target: { value: 'goes' } });
+    fireEvent.change(other!, { target: { value: 'go' } });
+
+    const payload = onChange.mock.lastCall![0] as Payload;
+    const pool = payload.pools[`${slotId}-options`]!;
+    expect(pool.map((item) => item.text)).toEqual(['goes', 'go']);
+    expect(payload.slots).toEqual([
+      { id: slotId, label: 'She ___ to school.', input: 'choice', pool: `${slotId}-options`, answer: [pool[0]!.id] },
+    ]);
+  });
+
+  it('pasting several lines into a sentence field creates one question per line, in one change', () => {
+    const onChange = vi.fn();
+    render(<ChooseHarness initialPayload={EMPTY_PAYLOAD} onChange={onChange} />);
+    paste(
+      screen.getByTestId('choose-ghost-sentence-b1'),
+      'She ___ to school. | goes | go\n\nThey ___ football. | were playing | played | are playing',
+    );
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const sentences = screen.getAllByTestId(/^choose-sentence-/) as HTMLInputElement[];
+    expect(sentences.map((field) => field.value)).toEqual(['She ___ to school.', 'They ___ football.']);
+    expect(optionFields(slotIdOf(sentences[1]!)).map((field) => field.value)).toEqual([
+      'were playing',
+      'played',
+      'are playing',
+    ]);
+    expect(screen.getByTestId('choose-paste-feedback-b1').textContent).toContain('Se agregaron 2 preguntas');
+  });
+
+  it('teaches the paste format: "oración | correcta | otra | otra"', () => {
+    render(<ChooseHarness initialPayload={EMPTY_PAYLOAD} />);
+    expect(screen.getByTestId('choose-paste-hint-b1').textContent).toBe(
+      'Pega una pregunta por línea: oración | correcta | otra | otra',
+    );
+  });
+
+  it('each question has its own context image field and an optional "¿Por qué?"', () => {
+    const onChange = vi.fn();
+    render(<ChooseHarness initialPayload={CHOOSE_ONE_PAYLOAD} onChange={onChange} />);
+    const card = screen.getByTestId('choose-question-q1');
+    expect(within(card).getByTestId('choose-image-add-q1').textContent).toContain('Agregar imagen');
+
+    const why = within(card).getByTestId('choose-explanation-q1') as HTMLInputElement;
+    expect(why.getAttribute('aria-label')).toBe('¿Por qué? (opcional)');
+    fireEvent.change(why, { target: { value: 'Every day: present simple.' } });
+    expect((onChange.mock.lastCall![0] as Payload).slots[0]!.explanation).toBe('Every day: present simple.');
+  });
+
+  it('the status line turns to "Listo para jugar" once one question is complete, and the amber hint goes', () => {
+    vi.useFakeTimers();
+    try {
+      const incomplete: Payload = {
+        ...CHOOSE_ONE_PAYLOAD,
+        pools: { 'q1-options': [{ id: 'q1-a', text: 'goes' }, { id: 'q1-b', text: '' }] },
+      };
+      render(<ChooseHarness initialPayload={incomplete} />);
+      expect(screen.getByTestId('choose-hint-b1').getAttribute('data-tone')).toBe('warn');
+      expect(screen.getByTestId('template-stage-empty-b1')).toBeTruthy();
+
+      fireEvent.change(screen.getByTestId('choose-option-text-q1-b'), { target: { value: 'go' } });
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+
+      expect(screen.getByTestId('choose-ready-b1').textContent).toBe('Listo para jugar · 1 pregunta');
+      expect(screen.queryByTestId('choose-hint-b1')).toBeNull();
+      expect(screen.getByTestId('choose-tip-b1').textContent).toBe('Con 5 preguntas o más, el juego es más retador.');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the live preview plays the real "Elegir la respuesta" game, with the question image', () => {
+    render(
+      <ChooseHarness
+        initialPayload={CHOOSE_ONE_PAYLOAD}
+        initialPromptImages={{ q1: { path: 'u1/a1/question-1.webp', width: 480, height: 360 } }}
+      />,
+    );
+    const stage = screen.getByTestId('template-stage-b1');
+    expect(within(stage).getByTestId('quiz-choose')).toBeTruthy();
+    expect(within(stage).getByTestId('choose-image')).toBeTruthy();
+  });
+
+  it('shows a rejected submit\'s plain message inside the question it names', () => {
+    render(
+      <ChooseHarness
+        initialPayload={CHOOSE_ONE_PAYLOAD}
+        incompleteSlotId="q1"
+        incompleteMessage="Escribe la oración de esta pregunta."
+      />,
+    );
+    expect(within(screen.getByTestId('choose-question-q1')).getByTestId('question-incomplete-q1').textContent).toBe(
+      'Escribe la oración de esta pregunta.',
+    );
+  });
+
+  it('"Agregar pregunta" and Ctrl+Enter both add another choice question, never a plain text row', () => {
+    const onChange = vi.fn();
+    render(<ChooseHarness initialPayload={CHOOSE_ONE_PAYLOAD} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId('choose-add-b1'));
+    fireEvent.keyDown(screen.getByTestId('choose-sentence-q1'), { key: 'Enter', ctrlKey: true });
+
+    const sentences = screen.getAllByTestId(/^choose-sentence-/);
+    expect(sentences).toHaveLength(3);
+    for (const sentence of sentences.slice(1)) expect(optionFields(slotIdOf(sentence))).toHaveLength(2);
+    const payload = onChange.mock.lastCall![0] as Payload;
+    expect(payload.slots.every((slot) => slot.input === 'choice')).toBe(true);
+  });
+
+  it('removing a question removes its card and its options pool', () => {
+    const onChange = vi.fn();
+    render(<ChooseHarness initialPayload={CHOOSE_ONE_PAYLOAD} onChange={onChange} />);
+    fireEvent.click(screen.getByTestId('choose-remove-q1'));
+
+    expect(screen.queryByTestId('choose-question-q1')).toBeNull();
+    expect(onChange.mock.lastCall![0]).toEqual(expect.objectContaining({ slots: [], pools: {} }));
+  });
+});
+
 describe('QuizBlockEditor — "Cambiar de molde" (R2)', () => {
   // Owner decision (2026-10-19 follow-up): "vamos primero por el único
   // propósito" — each activity keeps the single mold it was created with,
@@ -1763,7 +2007,7 @@ describe('QuizBlockEditor — "Cambiar de molde" (R2)', () => {
     expect(screen.queryByTestId('change-mold-b1')).toBeNull();
   });
 
-  // The dialog's own rendering (5 options, "Actual"/disabled + reason text)
+  // The dialog's own rendering (6 options, "Actual"/disabled + reason text)
   // is `ChangeMoldDialog.tsx`'s own concern, decoupled here from
   // QuizBlockEditor's now-hidden trigger (there is no longer any UI path
   // that sets `moldDialogOpen`, so this mounts the dialog directly, exactly
@@ -1771,12 +2015,12 @@ describe('QuizBlockEditor — "Cambiar de molde" (R2)', () => {
   // `conversionOptions` itself (current/disabled/reason selection) is
   // already unit-tested in `templateConversion.test.ts`; this test's own
   // job is only the rendering on top of it.
-  it('ChangeMoldDialog lists the 5 molds — the current one marked, unavailable ones disabled with their reason', () => {
+  it('ChangeMoldDialog lists the 6 molds — the current one marked, unavailable ones disabled with their reason', () => {
     const block: QuizBlock = { id: 'b1', type: 'quiz', template: 'match', payload: MATCH_NO_REPEAT_PAYLOAD };
     render(<ChangeMoldDialog lang="es" open block={block} onOpenChange={() => {}} onChoose={() => {}} />);
 
     expect(screen.getByTestId('change-mold-dialog-b1')).toBeTruthy();
-    expect(screen.getAllByTestId(/^change-mold-option-b1-/)).toHaveLength(5);
+    expect(screen.getAllByTestId(/^change-mold-option-b1-/)).toHaveLength(6);
 
     const current = screen.getByTestId('change-mold-option-b1-match') as HTMLButtonElement;
     expect(current.textContent).toContain('Actual');
@@ -1788,6 +2032,10 @@ describe('QuizBlockEditor — "Cambiar de molde" (R2)', () => {
 
     const basic = screen.getByTestId('change-mold-option-b1-basic') as HTMLButtonElement;
     expect(basic.disabled).toBe(false);
+
+    // "Elegir la respuesta" has its own gallery name (`activities.start.choose`)
+    // — reading it used to throw before that copy existed.
+    expect(screen.getByTestId('change-mold-option-b1-choose').textContent).toContain('Elegir la respuesta');
   });
 
   // REMOVED (owner decision 2026-10-19 follow-up, judgment call documented

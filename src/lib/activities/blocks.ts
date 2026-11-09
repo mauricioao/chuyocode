@@ -752,7 +752,9 @@ export interface IncompleteBlockInfo {
     | 'quiz_no_slots'
     | 'quiz_no_answer'
     | 'quiz_too_few_options'
-    | 'quiz_answer_not_in_pool';
+    | 'quiz_answer_not_in_pool'
+    | 'choose_no_sentence'
+    | 'choose_no_correct_option';
 }
 
 /** Mechanics whose answer is one id drawn from a shared pool — same set `SlotAnswerEditor.tsx` authors against. */
@@ -778,6 +780,33 @@ function findIncompleteSlot(payload: Payload): { zoneId: string; reason: Incompl
       if (!slot.answer.every((answer) => ids.has(answer))) {
         return { zoneId: slot.id, reason: 'quiz_answer_not_in_pool' };
       }
+    }
+  }
+  return null;
+}
+
+/**
+ * The first "Elegir la respuesta" (`template: 'choose'`) question its player
+ * would skip, or `null` — the same bar `chooseQuestion.ts`'s
+ * `deriveChooseQuestions` plays by: a sentence, at least two options WITH
+ * TEXT (the editor always keeps two option fields, so an empty field is not
+ * an option yet), and the correct one (`answer[0]`, the author's first
+ * option) among them. Reuses `quiz_too_few_options` for the options gap, so
+ * its message stays the one every multiple-choice question already shows.
+ */
+function findIncompleteChooseSlot(payload: Payload): { zoneId: string; reason: IncompleteBlockInfo['reason'] } | null {
+  for (const slot of payload.slots) {
+    if (slot.label.trim() === '') {
+      return { zoneId: slot.id, reason: 'choose_no_sentence' };
+    }
+    const items: PoolItem[] = slot.pool !== undefined ? (payload.pools[slot.pool] ?? []) : [];
+    const withText = items.filter((item) => (item.text ?? '').trim() !== '');
+    if (withText.length < 2) {
+      return { zoneId: slot.id, reason: 'quiz_too_few_options' };
+    }
+    const correctId = slot.answer[0];
+    if (correctId === undefined || !withText.some((item) => item.id === correctId)) {
+      return { zoneId: slot.id, reason: 'choose_no_correct_option' };
     }
   }
   return null;
@@ -829,7 +858,8 @@ export function findIncompleteBlock(blocks: Block[]): IncompleteBlockInfo | null
     if (block.payload.slots.length === 0) {
       return { blockId: block.id, zoneId: null, reason: 'quiz_no_slots' };
     }
-    const incompleteSlot = findIncompleteSlot(block.payload);
+    const incompleteSlot =
+      block.template === 'choose' ? findIncompleteChooseSlot(block.payload) : findIncompleteSlot(block.payload);
     if (incompleteSlot) {
       return { blockId: block.id, zoneId: incompleteSlot.zoneId, reason: incompleteSlot.reason };
     }

@@ -6,9 +6,9 @@
  * blank slate. Pure, zero I/O, zero React — same posture as every other
  * module in this directory (`clozeSentences.ts`, `groupSort.ts`).
  *
- * THE FIVE MOLDS: `undefined` ("Varios juegos", the plain question list —
- * `QuizTemplate`'s own "Básico" predates this name) plus the four named
- * templates (`match`, `reorder`, `cloze`, `groupsort`). Every mold's content
+ * THE SIX MOLDS: `undefined` ("Varios juegos", the plain question list —
+ * `QuizTemplate`'s own "Básico" predates this name) plus the five named
+ * templates (`match`, `reorder`, `cloze`, `groupsort`, `choose`). Every mold's content
  * is read/written through `authoringDraft.ts`'s `Draft` (the same `payload
  * <-> Draft` round trip `QuizBlockEditor.tsx` already uses), and the
  * `cloze`/`groupsort` pool names are derived from the block id with the
@@ -57,8 +57,13 @@ import { deriveGroupSortRows } from './groupSort';
 /** Every mold a quiz block can be authored as — `undefined` is "Varios juegos" ("Básico"). */
 export type Mold = QuizTemplate | undefined;
 
-/** The five molds, in the order they are offered (matches `BlockTypePicker.tsx`'s own gallery order). */
-export const MOLDS: readonly Mold[] = [undefined, 'match', 'reorder', 'cloze', 'groupsort'];
+/**
+ * The six molds, in the order they are offered (matches `BlockTypePicker.tsx`'s
+ * own gallery order). `choose` ("Elegir la respuesta") has no shape-preserving
+ * mapping to or from any other mold yet, so a non-empty one only ever converts
+ * through the drop-everything fallback (see this file's own header).
+ */
+export const MOLDS: readonly Mold[] = [undefined, 'match', 'reorder', 'cloze', 'groupsort', 'choose'];
 
 /** Why a mold is not offered for this block's current content — a short key, not prose, so the UI owns the wording. */
 export type ConversionReason = 'needs_sentences' | 'needs_repeated_answers' | 'not_supported';
@@ -181,7 +186,7 @@ function unavailableReason(from: Mold, to: Mold, draft: Draft): ConversionReason
 }
 
 /**
- * For each of the five molds: whether it is offered for this block's CURRENT
+ * For each of the six molds: whether it is offered for this block's CURRENT
  * content, which one is the block's own current mold, and — when not offered
  * — why (a short reason key the caller localizes). An empty block (nothing
  * to lose) offers every mold (§11.1).

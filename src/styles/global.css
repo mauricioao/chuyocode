@@ -1788,6 +1788,18 @@ h3 {
   box-shadow: 0 0 0 2px var(--color-pop-sky-deep);
 }
 
+/* The same field for a longer text that wraps (`TemplateTextArea`, "Elegir
+ * la respuesta"'s "¿Por qué?"): one 40px line at rest, growing with its own
+ * text where `field-sizing` exists; elsewhere it keeps one line and scrolls. */
+.template-field-multiline {
+  display: block;
+  height: auto;
+  min-height: 40px;
+  padding-block: 9px;
+  resize: none;
+  field-sizing: content;
+}
+
 /* Desktop only (T3 toolbar-dock pass, "-1/2pt"): phones keep 17px because
  * iOS Safari zooms into any input under 16px. */
 @media (min-width: 1024px) and (pointer: fine) {
