@@ -509,3 +509,81 @@ describe('convertBlock — exhaustive: every pair, for every source mold, is tot
     }
   }
 });
+
+// "Elegir la respuesta" (`choose`) has no shape-preserving mapping to or from
+// any other mold: its sentence-with-blanks plus lettered options would lose
+// the options going out, and nothing else carries options coming in. So it
+// is never offered for a block WITH content, in either direction — only an
+// empty block (nothing to lose) still converts, like every other mold.
+describe('"Elegir la respuesta" (choose) — never converts content', () => {
+  const CHOOSE_PAYLOAD: Payload = {
+    pools: {
+      'c1-options': [
+        { id: 'c1-o0', text: 'goes' },
+        { id: 'c1-o1', text: 'go' },
+      ],
+      'c2-options': [
+        { id: 'c2-o0', text: 'are' },
+        { id: 'c2-o1', text: 'is' },
+      ],
+    },
+    slots: [
+      { id: 'c1', label: 'She ___ to school.', input: 'choice', pool: 'c1-options', answer: ['c1-o0'] },
+      { id: 'c2', label: 'We ___ happy.', input: 'choice', pool: 'c2-options', answer: ['c2-o0'] },
+    ],
+  };
+
+  it('a choose block with content offers no other mold, every one "not_supported"', () => {
+    const opts = conversionOptions(quizBlock('choose', CHOOSE_PAYLOAD));
+    for (const opt of opts) {
+      if (opt.current) continue;
+      expect(opt).toMatchObject({ available: false, reason: 'not_supported' });
+    }
+  });
+
+  it.each([
+    { from: undefined, payload: BASIC_TEXT_PAYLOAD },
+    // An all-multiple-choice "Varios juegos" block is still not offered:
+    // its questions carry no blank and its own answer rules.
+    { from: undefined, payload: BASIC_CHOICE_PAYLOAD },
+    { from: 'match', payload: MATCH_WITH_REPEATS_PAYLOAD },
+    { from: 'reorder', payload: REORDER_PAYLOAD },
+    { from: 'cloze', payload: CLOZE_PAYLOAD },
+    { from: 'groupsort', payload: GROUPSORT_PAYLOAD },
+  ] as Array<{ from: Mold; payload: Payload }>)('$from with content never offers choose', ({ from, payload }) => {
+    const opts = conversionOptions(quizBlock(from, payload));
+    expect(opts.find((o) => o.template === 'choose')).toMatchObject({ available: false, reason: 'not_supported' });
+  });
+
+  it('an empty choose block still offers every mold — nothing to lose', () => {
+    for (const opt of conversionOptions(quizBlock('choose', EMPTY_PAYLOAD))) {
+      expect(opt.available).toBe(true);
+      expect(opt.reason).toBeUndefined();
+    }
+  });
+
+  it.each([undefined, 'match', 'reorder', 'cloze', 'groupsort'] as const)(
+    'convertBlock(choose -> %s), if forced anyway, keeps nothing and reports every question and image dropped',
+    (to) => {
+      const block: QuizBlock = {
+        ...quizBlock('choose', CHOOSE_PAYLOAD),
+        promptImages: {
+          c1: {
+            path: uploadPath('a1a1a1a1-0000-4000-8000-000000000001', 'b2b2b2b2-0000-4000-8000-000000000003', 'question'),
+            width: 400,
+            height: 300,
+          },
+        },
+      };
+      const { block: converted, dropped } = convertBlock(block, to);
+      expect(converted.template).toBe(to);
+      expect(converted.payload.slots).toEqual([]);
+      expect(converted.promptImages).toBeUndefined();
+      expect(dropped).toEqual([
+        { kind: 'questions', count: 2 },
+        { kind: 'images', count: 1 },
+      ]);
+      expect(parseBlocks([converted], 'draft')).not.toBeNull();
+    },
+  );
+});

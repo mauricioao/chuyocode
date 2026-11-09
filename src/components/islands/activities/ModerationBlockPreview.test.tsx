@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import ModerationBlockPreview from './ModerationBlockPreview';
 import type { Block } from '@/lib/activities/blocks';
+import { SHEET_BLANK } from '@/lib/activities/chooseSheet';
 
 afterEach(() => cleanup());
 
@@ -320,5 +321,91 @@ describe('ModerationBlockPreview — background (plantillas: fondo, owner decisi
   it('the mold-less "Varios juegos" block never shows a background section', () => {
     render(<ModerationBlockPreview lang="es" block={QUIZ} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={false} />);
     expect(screen.queryByTestId('moderation-block-background')).toBeNull();
+  });
+});
+
+describe('ModerationBlockPreview — "Elegir la respuesta"', () => {
+  const CHOOSE: Block = {
+    id: 'q3',
+    type: 'quiz',
+    template: 'choose',
+    payload: {
+      pools: {
+        'c1-options': [
+          { id: 'c1-o0', text: 'goes' },
+          { id: 'c1-o1', text: 'go' },
+          { id: 'c1-o2', text: 'going' },
+        ],
+        'c2-options': [
+          { id: 'c2-o0', text: 'were playing / started' },
+          { id: 'c2-o1', text: 'played / was starting' },
+        ],
+      },
+      slots: [
+        {
+          id: 'c1',
+          label: 'She ___ to school every day.',
+          input: 'choice',
+          pool: 'c1-options',
+          answer: ['c1-o0'],
+          explanation: 'With she, the present simple adds -s.',
+        },
+        { id: 'c2', label: 'They ___ football when it ___ to rain.', input: 'choice', pool: 'c2-options', answer: ['c2-o0'] },
+      ],
+    },
+    promptImages: { c1: { path: 'activity-images/q3/question-img-1.webp', width: 400, height: 300 } },
+  };
+
+  function renderChoose(showAnswers: boolean) {
+    render(
+      <ModerationBlockPreview lang="es" block={CHOOSE} resolveImageUrl={resolveImageUrl} resolveAudioUrl={resolveAudioUrl} showAnswers={showAnswers} />,
+    );
+  }
+
+  it('shows every question with its sentence, blanks as lines, and its own image', () => {
+    renderChoose(false);
+    expect(screen.getByTestId('moderation-choose-sentence-c1').textContent).toBe(`She ${SHEET_BLANK} to school every day.`);
+    expect(screen.getByTestId('moderation-choose-sentence-c2').textContent).toBe(`They ${SHEET_BLANK} football when it ${SHEET_BLANK} to rain.`);
+    const img = screen.getByTestId('moderation-question-image-c1') as HTMLImageElement;
+    expect(img.src).toContain(encodeURIComponent('activity-images/q3/question-img-1.webp'));
+    expect(screen.queryByTestId('moderation-question-image-c2')).toBeNull();
+  });
+
+  it('lists every option of every question, even with the answers hidden — and marks none of them', () => {
+    renderChoose(false);
+    for (const id of ['c1-o0', 'c1-o1', 'c1-o2', 'c2-o0', 'c2-o1']) {
+      expect(screen.getByTestId(`moderation-choose-option-${id}`)).toBeTruthy();
+    }
+    expect(screen.getByTestId('moderation-choose-option-c2-o1').textContent).toContain('played / was starting');
+    expect(document.querySelectorAll('[data-correct="true"]')).toHaveLength(0);
+    expect(screen.getByTestId('moderation-choose-c1').textContent).not.toContain('Correcta');
+    expect(screen.queryByTestId('moderation-choose-explanation-c1')).toBeNull();
+  });
+
+  it('with the answers shown, marks exactly the correct option of each question, fills the sentence and shows the explanation', () => {
+    renderChoose(true);
+    const marked = [...document.querySelectorAll('[data-correct="true"]')].map((el) => el.getAttribute('data-testid'));
+    expect(marked).toEqual(['moderation-choose-option-c1-o0', 'moderation-choose-option-c2-o0']);
+    expect(screen.getByTestId('moderation-choose-option-c1-o0').textContent).toContain('Correcta');
+    expect(screen.getByTestId('moderation-choose-option-c1-o1').textContent).not.toContain('Correcta');
+    expect(screen.getByTestId('moderation-choose-sentence-c1').textContent).toBe('She goes to school every day.');
+    expect(screen.getByTestId('moderation-choose-sentence-c2').textContent).toBe(
+      'They were playing football when it started to rain.',
+    );
+    expect(screen.getByTestId('moderation-choose-explanation-c1').textContent).toContain('With she, the present simple adds -s.');
+    expect(screen.queryByTestId('moderation-choose-explanation-c2')).toBeNull();
+  });
+
+  it('shows the block background like every other molded block', () => {
+    render(
+      <ModerationBlockPreview
+        lang="es"
+        block={{ ...CHOOSE, background: { kind: 'preset', preset: 'sky' } }}
+        resolveImageUrl={resolveImageUrl}
+        resolveAudioUrl={resolveAudioUrl}
+        showAnswers={false}
+      />,
+    );
+    expect(screen.getByTestId('moderation-block-background')).toBeTruthy();
   });
 });

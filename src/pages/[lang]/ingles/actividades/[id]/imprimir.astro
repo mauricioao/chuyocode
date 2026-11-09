@@ -34,6 +34,10 @@
  * list (a blank marker becomes "________"; a pool-backed question's options
  * become "a) b) c)…", via {@link getSlotItems} — the exact renderer-free
  * summary `ModerationBlockPreview`'s own helpers already established).
+ * Each quiz template prints its own worksheet shape instead (see each
+ * branch below); "Elegir la respuesta" letters its options in a fixed,
+ * per-question shuffled order (`chooseSheet.ts`) so the correct one — always
+ * stored first — is not always "a)".
  * `?respuestas=1` (a plain "Incluir respuestas" link, not a client toggle —
  * this page ships no interactive JS beyond the print button) appends an
  * answer key: each worksheet's zones in READING order
@@ -53,6 +57,7 @@ import { zoneAnswerSummary, quizSlotAnswerSummary } from '@lib/activities/modera
 import { splitLabelAtBlank, getSlotItems, type Slot } from '@lib/exercisePayload';
 import { deriveGroupSortGroups, groupSortPoolName, seedFromString, shuffleWithSeed } from '@lib/activities/gameModes';
 import { deriveClozeGameSentences } from '@lib/activities/clozeSentences';
+import { chooseSheetQuestions, type SheetQuestion } from '@lib/activities/chooseSheet';
 import type { Block } from '@lib/activities/blocks';
 import '@styles/global.css';
 
@@ -111,7 +116,20 @@ function blockLabel(block: Block, worksheetPosition: number): string {
   if (block.template === 'reorder') return t.reorderLabel;
   if (block.template === 'cloze') return t.clozeLabel;
   if (block.template === 'groupsort') return t.groupSortLabel;
+  if (block.template === 'choose') return t.chooseLabel;
   return t.quizLabel;
+}
+
+/**
+ * An "Elegir la respuesta" question's answer, as one run of text and bold
+ * pieces: the sentence with its blanks filled (the fill in bold), or — for a
+ * sentence with no blank — the correct option alone, in bold.
+ */
+function chooseAnswerRuns(question: SheetQuestion): Array<{ text: string; bold: boolean }> {
+  if (!question.filled) return [{ text: question.correct.text, bold: true }];
+  return question.filled.map((part) =>
+    part.kind === 'text' ? { text: part.text, bold: false } : { text: part.fill ?? '', bold: true },
+  );
 }
 
 /** A groupsort item's resolved display text — same fallback chain `moderationPreview.ts`'s own helpers use (pool item text, then media, then the raw id). */
@@ -177,6 +195,11 @@ function questionText(slot: Slot): string {
         break-before: page;
       }
       .print-quiz {
+        break-inside: avoid;
+      }
+      /* One "Elegir la respuesta" question — sentence, image and options —
+         never splits across two sheets, even when its whole block must. */
+      .print-choose-question {
         break-inside: avoid;
       }
       .print-answer-key {
@@ -377,6 +400,49 @@ function questionText(slot: Slot): string {
             );
           }
 
+          // "Elegir la respuesta" in print: each question with its sentence
+          // (every blank a writing line), its own context image, and its
+          // options lettered a) b) c) in that question's FIXED shuffled
+          // order (`chooseSheet.ts`) — the student circles one. The answer
+          // key below names the letter and fills the sentence in.
+          if (block.template === 'choose') {
+            return (
+              <section data-testid={`print-block-${block.id}`} class="print-quiz">
+                <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
+                <ol class="flex flex-col gap-5 text-black">
+                  {chooseSheetQuestions(block.payload).map((question, i) => {
+                    const promptImage = block.promptImages?.[question.id];
+                    // The image sits beside the sentence on paper and wide
+                    // screens, above it on a phone (beside it there, the
+                    // options would break mid-answer).
+                    return (
+                      <li data-testid={`print-choose-${question.id}`} class="print-choose-question flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-4">
+                        {promptImage && (
+                          <img
+                            src={imagePreviewUrl(promptImage.path)}
+                            alt=""
+                            width={promptImage.width}
+                            height={promptImage.height}
+                            data-testid={`print-choose-image-${question.id}`}
+                            class="h-24 w-32 flex-none rounded border border-black/20 object-contain"
+                          />
+                        )}
+                        <div class="min-w-0 flex-1">
+                          <p data-testid={`print-choose-sentence-${question.id}`}>{i + 1}. {question.prompt}</p>
+                          <ul data-testid={`print-choose-options-${question.id}`} class="mt-2 ml-5 flex flex-wrap gap-x-8 gap-y-1">
+                            {question.options.map((option) => (
+                              <li>{option.letter}) {option.text}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </section>
+            );
+          }
+
           return (
             <section data-testid={`print-block-${block.id}`} class="print-quiz">
               <h2 class="mb-2 text-lg font-semibold text-black">{label}</h2>
@@ -476,6 +542,21 @@ function questionText(slot: Slot): string {
                       </div>
                     ))}
                   </div>
+                ) : block.template === 'choose' ? (
+                  <ol class="flex flex-col gap-1 text-sm text-black">
+                    {chooseSheetQuestions(block.payload).map((question, i) => (
+                      <li data-testid={`print-answer-choose-${question.id}`}>
+                        {i + 1}. {question.correct.letter}){' '}
+                        {chooseAnswerRuns(question).map((run) => (run.bold ? <strong>{run.text}</strong> : run.text))}
+                        {question.explanation && (
+                          <span>
+                            {' '}
+                            — {t.explanationLabel}: {question.explanation}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
                 ) : (
                   <ol class="flex flex-col gap-1 text-sm text-black">
                     {block.payload.slots.map((slot, i) => (

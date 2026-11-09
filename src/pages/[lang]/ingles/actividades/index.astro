@@ -270,7 +270,9 @@ const panelClearHref = (() => {
 // One option per remaining activity type (owner decision 2026-10-20): never
 // "Varios juegos" (`'basic'`) while `VARIOS_JUEGOS_ENABLED` is `false` —
 // same gallery order as the create picker's own `BlockTypePicker.tsx`
-// (worksheet, [basic], match, reorder, cloze, groupsort).
+// (worksheet, [basic], match, reorder, cloze, groupsort, choose).
+// "Elegir la respuesta" reads its name straight from the create picker's own
+// `start.choose.title`, so the filter and the gallery can never disagree.
 const TYPE_OPTIONS: Array<{ value: BlockKind | ''; label: string }> = [
   { value: '', label: t.typeAll },
   { value: 'worksheet', label: t.typeWorksheet },
@@ -279,6 +281,7 @@ const TYPE_OPTIONS: Array<{ value: BlockKind | ''; label: string }> = [
   { value: 'reorder', label: t.typeReorder },
   { value: 'cloze', label: t.typeCloze },
   { value: 'groupsort', label: t.typeGroupsort },
+  { value: 'choose', label: UI_LABELS[lang].activities.start.choose.title },
 ];
 
 /** `activeTipo`'s own display label, for the chip row below — built from

@@ -1403,6 +1403,9 @@ export const UI_LABELS = {
         zoneLabel: 'Zona',
         quizAnswerLabel: 'Respuesta correcta',
         clozeDistractorsLabel: 'Distractores',
+        // "Elegir la respuesta": the mark on the correct option, shown only
+        // with "Mostrar respuestas" on, like every other answer here.
+        chooseCorrectOption: 'Correcta',
         explanationLabel: 'Explicación',
         // "Varios juegos"' own question context image (owner decision
         // 2026-10-16) — shown to the moderator with this explicit label so
@@ -1477,6 +1480,8 @@ export const UI_LABELS = {
         // "Ordenar por grupos" in print: same reasoning as `matchLabel`.
         groupSortLabel: 'Ordenar por grupos',
         groupSortItemsLabel: 'Elementos',
+        // "Elegir la respuesta" in print: same reasoning as `matchLabel`.
+        chooseLabel: 'Elegir la respuesta',
       },
       // Presentation mode v1 ("Preguntas", presentation mode pass,
       // `/[lang]/ingles/actividades/[id]/presentar`). A separate,
@@ -2915,6 +2920,7 @@ export const UI_LABELS = {
         zoneLabel: 'Zone',
         quizAnswerLabel: 'Correct answer',
         clozeDistractorsLabel: 'Distractors',
+        chooseCorrectOption: 'Correct',
         explanationLabel: 'Explanation',
         questionImageLabel: 'Question image',
         backgroundLabel: 'Activity background',
@@ -2970,6 +2976,7 @@ export const UI_LABELS = {
         clozeBankLabel: 'Word bank',
         groupSortLabel: 'Group sort',
         groupSortItemsLabel: 'Items',
+        chooseLabel: 'Choose the answer',
       },
       present: {
         pageDescription: 'Full-screen presentation of this English activity, made for projecting in class.',

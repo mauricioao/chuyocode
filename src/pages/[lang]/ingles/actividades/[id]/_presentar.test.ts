@@ -391,3 +391,50 @@ describe('GET /[lang]/ingles/actividades/[id]/presentar -- author preview of an 
     expect(html).toContain('nextActivityHref&quot;:[0,&quot;/es/ingles/actividades?nivel=A2&quot;');
   });
 });
+
+// Presentation mode is hidden (`PRESENTATION_ENABLED`), but `/presentar`
+// stays reachable by a direct link. An "Elegir la respuesta" block has no
+// slide of its own: each question is a plain multiple-choice slot, so it
+// falls back to one ordinary question slide per question — never a crash.
+describe('GET /[lang]/ingles/actividades/[id]/presentar — "Elegir la respuesta" by direct link', () => {
+  const CHOOSE_ACTIVITY = {
+    id: 'abc',
+    title: 'Elegir la respuesta: present simple',
+    level: 'A2',
+    blocks: [
+      {
+        id: 'q1',
+        type: 'quiz',
+        template: 'choose',
+        payload: {
+          pools: {
+            'c1-options': [
+              { id: 'c1-o0', text: 'goes' },
+              { id: 'c1-o1', text: 'go' },
+            ],
+            'c2-options': [
+              { id: 'c2-o0', text: 'are' },
+              { id: 'c2-o1', text: 'is' },
+            ],
+          },
+          slots: [
+            { id: 'c1', label: 'She ___ to school.', input: 'choice', pool: 'c1-options', answer: ['c1-o0'] },
+            { id: 'c2', label: 'We ___ happy.', input: 'choice', pool: 'c2-options', answer: ['c2-o0'] },
+          ],
+        },
+        promptImages: { c1: { path: 'activity-images/abc/question-img-1.webp', width: 400, height: 300 } },
+      },
+    ],
+  };
+
+  it('renders 200 and opens on the first question, as an ordinary question slide', async () => {
+    activityResult.value = CHOOSE_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/abc/presentar', {
+      params: { lang: 'es', id: 'abc' },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-testid="presentation-question-c1"');
+    expect(html).toContain('goes');
+  });
+});

@@ -14,8 +14,11 @@ import type { Block, BlockBackground } from '@/lib/activities/blocks';
 import { zoneAnswerSummary, zoneOptionsSummary, quizSlotAnswerSummary } from '@/lib/activities/moderationPreview';
 import { deriveClozeGameSentences } from '@/lib/activities/clozeSentences';
 import { deriveGroupSortGroups } from '@/lib/activities/gameModes';
+import { chooseSheetQuestions } from '@/lib/activities/chooseSheet';
 import { backdropCssVar, backdropLabelKey } from '@/lib/activities/backgrounds';
 import { FadeImage } from '@/components/ui/fade-image';
+import { cn } from '@/lib/utils';
+import { CheckCircleIcon } from '@phosphor-icons/react/dist/ssr/CheckCircle';
 
 /**
  * This block's own decorative background (plantillas: fondo, owner
@@ -269,6 +272,89 @@ export default function ModerationBlockPreview({
               </span>
             </li>
           ))}
+        </ul>
+      </div>
+    );
+  }
+
+  // "Elegir la respuesta": each question the way a sheet shows it — its
+  // sentence (every blank a line), its own context image, and EVERY option,
+  // lettered in the same fixed order the print view uses (`chooseSheet.ts`),
+  // so the correct one (always stored first) is not given away by its place.
+  // `showAnswers` then marks the correct option, fills the sentence in and
+  // shows the "¿Por qué?" — the same toggle as every other answer here.
+  if (block.template === 'choose') {
+    return (
+      <div data-testid={`moderation-block-${block.id}`} className="flex flex-col gap-2">
+        <ModerationBlockBackground lang={lang} background={block.background} resolveImageUrl={resolveImageUrl} />
+        <ul className="flex flex-col gap-2">
+          {chooseSheetQuestions(block.payload).map((question) => {
+            const promptImage = block.promptImages?.[question.id];
+            return (
+              <li
+                key={question.id}
+                data-testid={`moderation-choose-${question.id}`}
+                className="rounded-md border border-border p-2 text-sm"
+              >
+                <p data-testid={`moderation-choose-sentence-${question.id}`} className="font-medium text-foreground">
+                  {showAnswers && question.filled
+                    ? question.filled.map((part, i) =>
+                        part.kind === 'text' ? (
+                          <span key={i}>{part.text}</span>
+                        ) : (
+                          <strong key={i} className="text-accent-ink">
+                            {part.fill}
+                          </strong>
+                        ),
+                      )
+                    : question.prompt}
+                </p>
+                {promptImage && (
+                  <div className="mt-1 flex flex-col gap-1">
+                    <span className="text-xs font-medium text-muted-foreground">{t.questionImageLabel}</span>
+                    <FadeImage
+                      data-testid={`moderation-question-image-${question.id}`}
+                      src={resolveImageUrl(promptImage.path)}
+                      alt=""
+                      className="max-h-48 w-full max-w-xs rounded-md object-contain"
+                      placeholderClassName="h-32 w-full max-w-xs rounded-md"
+                    />
+                  </div>
+                )}
+                <ul aria-label={t.optionsLabel} className="mt-1.5 flex flex-col gap-1">
+                  {question.options.map((option) => {
+                    const marked = showAnswers && option.correct;
+                    return (
+                      <li
+                        key={option.id}
+                        data-testid={`moderation-choose-option-${option.id}`}
+                        data-correct={marked ? 'true' : undefined}
+                        className={cn(
+                          'flex flex-wrap items-center gap-x-2',
+                          marked ? 'font-medium text-foreground' : 'text-muted-foreground',
+                        )}
+                      >
+                        <span>
+                          {option.letter}) {option.text}
+                        </span>
+                        {marked && (
+                          <span className="inline-flex items-center gap-1 text-success">
+                            <CheckCircleIcon weight="fill" aria-hidden="true" className="size-4" />
+                            {t.chooseCorrectOption}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {showAnswers && question.explanation && (
+                  <p data-testid={`moderation-choose-explanation-${question.id}`} className="mt-1 text-muted-foreground">
+                    {t.explanationLabel}: {question.explanation}
+                  </p>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
     );

@@ -60,8 +60,9 @@ export type Mold = QuizTemplate | undefined;
 /**
  * The six molds, in the order they are offered (matches `BlockTypePicker.tsx`'s
  * own gallery order). `choose` ("Elegir la respuesta") has no shape-preserving
- * mapping to or from any other mold yet, so a non-empty one only ever converts
- * through the drop-everything fallback (see this file's own header).
+ * mapping to or from any other mold, so {@link conversionOptions} never offers
+ * it for a block with content, in either direction — only an empty block
+ * (nothing to lose) converts to or from it.
  */
 export const MOLDS: readonly Mold[] = [undefined, 'match', 'reorder', 'cloze', 'groupsort', 'choose'];
 
@@ -170,6 +171,11 @@ function hasRepeatedMatchAnswers(draft: Draft): boolean {
 // ---------------------------------------------------------------------------
 
 function unavailableReason(from: Mold, to: Mold, draft: Draft): ConversionReason | undefined {
+  // `choose` ("Elegir la respuesta"), either direction: going out would lose
+  // its options (and "needs sentences" would misname a block that HAS them),
+  // and no other mold carries options coming in — not even an all-choice
+  // "Varios juegos" block, whose questions carry no blank.
+  if (from === 'choose' || to === 'choose') return 'not_supported';
   // `undefined` ("Varios juegos") <-> `match`.
   if ((from === undefined && to === 'match') || (from === 'match' && to === undefined)) return undefined;
   // `reorder` <-> `cloze`.

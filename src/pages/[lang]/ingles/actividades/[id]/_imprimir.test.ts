@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createContainer } from '@/testSupport/astroContainer';
+import { chooseSheetQuestions } from '@/lib/activities/chooseSheet';
+import type { Payload } from '@/lib/exercisePayload';
 
 const { activityResult } = vi.hoisted(() => ({
   activityResult: { value: null as unknown },
@@ -408,5 +410,132 @@ describe('GET /[lang]/ingles/actividades/[id]/imprimir — "Ordenar por grupos"'
     expect(html).toContain('dog, cat');
     expect(html).toContain('data-testid="print-answer-groupsort-g2"');
     expect(html).toContain('bread, rice');
+  });
+});
+
+const CHOOSE_ACTIVITY = {
+  id: 'choose-1',
+  title: 'Elegir la respuesta: past continuous',
+  level: 'B1',
+  blocks: [
+    {
+      id: 'q1',
+      type: 'quiz',
+      template: 'choose',
+      payload: {
+        pools: {
+          'c1-options': [
+            { id: 'c1-o0', text: 'goes' },
+            { id: 'c1-o1', text: 'go' },
+            { id: 'c1-o2', text: 'going' },
+          ],
+          'c2-options': [
+            { id: 'c2-o0', text: 'were playing / started' },
+            { id: 'c2-o1', text: 'played / was starting' },
+            { id: 'c2-o2', text: 'are playing / starts' },
+          ],
+        },
+        slots: [
+          {
+            id: 'c1',
+            label: 'She ___ to school every day.',
+            input: 'choice',
+            pool: 'c1-options',
+            answer: ['c1-o0'],
+            explanation: 'With she, the present simple adds -s.',
+          },
+          { id: 'c2', label: 'They ___ football when it ___ to rain.', input: 'choice', pool: 'c2-options', answer: ['c2-o0'] },
+        ],
+      },
+      promptImages: { c1: { path: 'activity-images/choose-1/question-img-1.webp', width: 400, height: 300 } },
+    },
+  ],
+};
+
+/**
+ * One element's inner text, each tag read as a space and whitespace
+ * collapsed — the line a reader actually sees on paper. Assumes the element
+ * holds no nested element of its own tag.
+ */
+function textOf(html: string, testId: string): string {
+  const start = html.indexOf(`data-testid="${testId}"`);
+  if (start === -1) return '';
+  const open = html.indexOf('>', start) + 1;
+  const tag = html.slice(html.lastIndexOf('<', start) + 1, start).trim().split(/\s/)[0];
+  const close = html.indexOf(`</${tag}>`, open);
+  return html
+    .slice(open, close)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+describe('GET /[lang]/ingles/actividades/[id]/imprimir — "Elegir la respuesta"', () => {
+  it('names the block "Elegir la respuesta", never "Varios juegos"', async () => {
+    activityResult.value = CHOOSE_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/choose-1/imprimir', {
+      params: { lang: 'es', id: 'choose-1' },
+    });
+    const html = await res.text();
+    expect(html).toMatch(/data-testid="print-block-q1"[^>]*>\s*<h2[^>]*>Elegir la respuesta</);
+    expect(html).not.toContain('Varios juegos');
+  });
+
+  it('prints each sentence with every blank as a writing line, and its own image', async () => {
+    activityResult.value = CHOOSE_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/choose-1/imprimir', {
+      params: { lang: 'es', id: 'choose-1' },
+    });
+    const html = await res.text();
+    expect(textOf(html, 'print-choose-sentence-c1')).toBe('1. She ________ to school every day.');
+    expect(textOf(html, 'print-choose-sentence-c2')).toBe('2. They ________ football when it ________ to rain.');
+    expect(html).toContain('data-testid="print-choose-image-c1"');
+    expect(html).toContain(encodeURIComponent('activity-images/choose-1/question-img-1.webp'));
+    expect(html).not.toContain('data-testid="print-choose-image-c2"');
+  });
+
+  it("letters the options a) b) c) in each question's own fixed shuffled order — the sheet's, not the authored one", async () => {
+    activityResult.value = CHOOSE_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/choose-1/imprimir', {
+      params: { lang: 'es', id: 'choose-1' },
+    });
+    const html = await res.text();
+    const [c1, c2] = chooseSheetQuestions(CHOOSE_ACTIVITY.blocks[0]!.payload as Payload);
+    for (const q of [c1!, c2!]) {
+      expect(textOf(html, `print-choose-options-${q.id}`)).toBe(
+        q.options.map((option) => `${option.letter}) ${option.text}`).join(' '),
+      );
+    }
+    // Printing it again gives the very same sheet.
+    const again = await render('https://chuyocode.test/es/ingles/actividades/choose-1/imprimir', {
+      params: { lang: 'es', id: 'choose-1' },
+    });
+    expect(textOf(await again.text(), 'print-choose-options-c1')).toBe(textOf(html, 'print-choose-options-c1'));
+  });
+
+  it('gives away no answer without ?respuestas=1', async () => {
+    activityResult.value = CHOOSE_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/choose-1/imprimir', {
+      params: { lang: 'es', id: 'choose-1' },
+    });
+    const html = await res.text();
+    expect(html).not.toContain('data-testid="print-answer-key"');
+    expect(html).not.toContain('She goes to school');
+    expect(html).not.toContain('With she, the present simple adds -s.');
+  });
+
+  it('shows the correct letter and the sentence filled in, plus the explanation, in the answer key', async () => {
+    activityResult.value = CHOOSE_ACTIVITY;
+    const res = await render('https://chuyocode.test/es/ingles/actividades/choose-1/imprimir?respuestas=1', {
+      params: { lang: 'es', id: 'choose-1' },
+    });
+    const html = await res.text();
+    const [c1, c2] = chooseSheetQuestions(CHOOSE_ACTIVITY.blocks[0]!.payload as Payload);
+    expect(textOf(html, 'print-answer-choose-c1')).toBe(
+      `1. ${c1!.correct.letter}) She goes to school every day. — Por qué: With she, the present simple adds -s.`,
+    );
+    expect(textOf(html, 'print-answer-choose-c2')).toBe(
+      `2. ${c2!.correct.letter}) They were playing football when it started to rain.`,
+    );
   });
 });

@@ -1818,6 +1818,44 @@ describe('ActivityEditorIsland — submit for review', () => {
     );
   });
 
+  // "Elegir la respuesta": its two own submit reasons each read as a plain
+  // teacher message on the exact question — never a generic or untranslated one.
+  it.each([
+    { reason: 'choose_no_sentence', lang: 'es', message: 'Escribe la oración de esta pregunta.' },
+    { reason: 'choose_no_correct_option', lang: 'es', message: 'Escribe la respuesta correcta en la primera opción.' },
+    { reason: 'quiz_too_few_options', lang: 'es', message: 'Agrega al menos dos opciones a esta pregunta.' },
+    { reason: 'choose_no_sentence', lang: 'en', message: 'Write the sentence for this question.' },
+    { reason: 'choose_no_correct_option', lang: 'en', message: 'Write the correct answer in the first option.' },
+  ] as const)('shows "$message" on the choose question for an incomplete "$reason" submit ($lang)', async ({ reason, lang, message }) => {
+    const chooseBlock: Block = {
+      id: 'b1',
+      type: 'quiz',
+      template: 'choose',
+      payload: {
+        pools: { 'c1-options': [{ id: 'c1-o0', text: '' }, { id: 'c1-o1', text: 'go' }] },
+        slots: [{ id: 'c1', label: '', input: 'choice', pool: 'c1-options', answer: ['c1-o0'] }],
+      },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) }) // guardar
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'incomplete', blockId: 'b1', zoneId: 'c1', reason }),
+      }); // enviar
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor({ lang, initialBlocks: [chooseBlock] });
+
+    fireEvent.click(screen.getByTestId('submit-for-review-button'));
+    fireEvent.click(screen.getByTestId('submit-rights-checkbox'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('submit-dialog-confirm'));
+    });
+
+    expect(screen.queryByTestId('submit-for-review-dialog')).toBeNull();
+    expect(screen.getByTestId('question-incomplete-c1').textContent).toBe(message);
+  });
+
   it('clears the inline incomplete message once the author edits the block again', async () => {
     const fetchMock = vi
       .fn()

@@ -363,6 +363,7 @@ describe('GET /[lang]/ingles/actividades — tipo filter options (hide "Varios j
     expect(selectHtml).toContain('>Reordenar<');
     expect(selectHtml).toContain('>Completar la frase<');
     expect(selectHtml).toContain('>Ordenar por grupos<');
+    expect(selectHtml).toMatch(/<option value="choose"[^>]*>Elegir la respuesta</);
     expect(selectHtml).not.toContain('Varios juegos');
     expect(selectHtml).not.toContain('value="basic"');
     expect(selectHtml).not.toContain('value="quiz"');
@@ -388,6 +389,21 @@ describe('GET /[lang]/ingles/actividades — tipo filter options (hide "Varios j
     const html = await res.text();
     expect(html).toContain('data-testid="filter-chip-tipo"');
     expect(html).toMatch(/data-testid="filter-chip-tipo"[^>]*>\s*Une las parejas/);
+  });
+
+  it('filters by "Elegir la respuesta" (tipo=choose): passes it through, selects its option, and names its chip', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades?tipo=choose', { params: { lang: 'es' } });
+    const html = await res.text();
+    expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'choose' }));
+    expect(html).toMatch(/<option value="choose" selected/);
+    expect(html).toMatch(/data-testid="filter-chip-tipo"[^>]*>\s*Elegir la respuesta/);
+  });
+
+  it('names the "Elegir la respuesta" option in English too', async () => {
+    const res = await render('https://chuyocode.test/en/ingles/actividades', { params: { lang: 'en' } });
+    const html = await res.text();
+    const selectHtml = html.slice(html.indexOf('name="tipo"'), html.indexOf('</select>', html.indexOf('name="tipo"')));
+    expect(selectHtml).toMatch(/<option value="choose"[^>]*>Choose the answer</);
   });
 });
 
