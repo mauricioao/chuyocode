@@ -70,6 +70,23 @@ test('Escape closes the open list first, then the panel', async ({ page }) => {
   await expect(panel(page)).not.toHaveAttribute('open', '');
 });
 
+test.describe('on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  // Below `lg:` the panel is meant to be a full-width bottom sheet. A stray
+  // `right: auto` after `inset-inline: 0` used to undo the right edge, so the
+  // sheet shrank to its content (~180-210px, changing with the chosen value)
+  // and sat in the bottom-left corner over the catalog cards.
+  test('the filters panel is a bottom sheet spanning the full width', async ({ page }) => {
+    await openPanel(page);
+    const box = await panel(page).locator('.filters-panel').boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBe(0);
+    expect(box!.width).toBe(390);
+    expect(box!.y + box!.height).toBe(844);
+  });
+});
+
 test('a press outside closes the open list first, then the panel', async ({ page }) => {
   await openPanel(page);
   // Somewhere outside both the panel and the list that is not a link: the
