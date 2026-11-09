@@ -560,6 +560,28 @@ describe('QuizBlockPractice — "Ordenar por grupos" (groupsort) restricts its o
   });
 });
 
+describe('QuizBlockPractice — "Elegir la respuesta" (choose)', () => {
+  const CHOOSE_BLOCK: QuizBlock = {
+    id: 'q1',
+    type: 'quiz',
+    template: 'choose',
+    payload: {
+      pools: { 's1-options': [{ id: 'a', text: 'goes' }, { id: 'b', text: 'go' }] },
+      slots: [{ id: 's1', label: 'She ___ to school.', input: 'choice', pool: 's1-options', answer: ['a'] }],
+    },
+    promptImages: { s1: { path: 'activity-images/abc/question-img-1.webp', width: 400, height: 300 } },
+  };
+
+  it('plays its own one-question-per-screen board, with the question image, and no mode switcher', () => {
+    render(<QuizBlockPractice lang="es" block={CHOOSE_BLOCK} response={{}} onChange={vi.fn()} disabled={false} mode="quiz" />);
+    expect(screen.getByTestId('quiz-choose')).toBeTruthy();
+    expect(screen.getAllByTestId('choose-option')).toHaveLength(2);
+    expect(screen.getByTestId('choose-image')).toBeTruthy();
+    expect(screen.queryByTestId('quiz-game-mode-switcher')).toBeNull();
+    expect(screen.queryByTestId('quiz-slot-s1')).toBeNull();
+  });
+});
+
 describe('QuizBlockPractice — pose preload (owner report: "Vanina aparece de golpe")', () => {
   it('preloads the GameResult outcome poses once this block mounts, regardless of the starting game mode', () => {
     preloadCharacterPosesMock.mockClear();

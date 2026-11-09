@@ -23,7 +23,7 @@ export function isSortOrder(value: unknown): value is SortOrder {
  * {@link isBlockKindFilter} below narrows this to what `?tipo=` actually
  * ACCEPTS.
  */
-const ALL_BLOCK_KINDS: readonly BlockKind[] = ['worksheet', 'basic', 'match', 'reorder', 'cloze', 'groupsort'];
+const ALL_BLOCK_KINDS: readonly BlockKind[] = ['worksheet', 'basic', 'match', 'reorder', 'cloze', 'groupsort', 'choose'];
 
 /**
  * `?tipo=<kind>` validation (owner decision 2026-10-19/-20: hide "Varios

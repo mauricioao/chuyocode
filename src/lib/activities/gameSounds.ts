@@ -1,7 +1,7 @@
 /**
- * gameSounds — five short synthesized Web Audio cues for the game-feel
+ * gameSounds — six short synthesized Web Audio cues for the game-feel
  * engine (owner ask: "sonidos al levantar la ficha... la suavidad del
- * movimiento"): pick-up, drop, correct, wrong, finish. Pure scheduling
+ * movimiento"): pick-up, drop, correct, wrong, next, finish. Pure scheduling
  * functions over a minimal `GameAudioContext`-shaped interface — same
  * posture as `aventura/audio.ts`'s `playBlip` — so they are unit-testable
  * with a fake context and no real audio hardware.
@@ -89,6 +89,15 @@ export function playWrong(ctx: GameAudioContext | null): void {
   scheduleSequence(ctx, [{ offset: 0, frequencyHz: 196.0, durationS: 0.16, type: 'sine', gain: 0.06 }]);
 }
 
+/**
+ * Next: a single soft, short tone as the next question appears ("Elegir la
+ * respuesta") — quieter and shorter than "correct", so it reads as a page
+ * turn rather than more feedback.
+ */
+export function playNext(ctx: GameAudioContext | null): void {
+  scheduleSequence(ctx, [{ offset: 0, frequencyHz: 659.25, durationS: 0.06, type: 'sine', gain: 0.035 }]);
+}
+
 /** Finish: a short four-note ascending arpeggio (C6-E6-G6-C7), the calm "round over" flourish. */
 export function playFinish(ctx: GameAudioContext | null): void {
   scheduleSequence(ctx, [
@@ -99,13 +108,14 @@ export function playFinish(ctx: GameAudioContext | null): void {
   ]);
 }
 
-type GameCue = 'pickUp' | 'drop' | 'correct' | 'wrong' | 'finish';
+type GameCue = 'pickUp' | 'drop' | 'correct' | 'wrong' | 'next' | 'finish';
 
 const CUE_PLAYERS: Record<GameCue, (ctx: GameAudioContext | null) => void> = {
   pickUp: playPickUp,
   drop: playDrop,
   correct: playCorrect,
   wrong: playWrong,
+  next: playNext,
   finish: playFinish,
 };
 

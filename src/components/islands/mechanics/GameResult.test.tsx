@@ -66,6 +66,20 @@ describe('GameResult', () => {
       render(<GameResult lang="en" correct={3} total={3} onPlayAgain={() => {}} elapsedMs={45_000} />);
       expect(screen.getByTestId('game-result-time').textContent).toBe('Time: 45 s');
     });
+
+    it('renders "en m:ss" with a stopwatch icon under the score when `elapsedFormat="clock"` (Elegir la respuesta)', () => {
+      render(<GameResult lang="es" correct={7} total={10} onPlayAgain={() => {}} elapsedMs={125_000} elapsedFormat="clock" />);
+      const time = screen.getByTestId('game-result-time');
+      expect(time.textContent).toBe('en 2:05');
+      expect(time.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+      // Right under the score line, in reading order.
+      expect(screen.getByTestId('game-result-score').nextElementSibling).toBe(time);
+    });
+
+    it('renders the English "in m:ss" for lang="en"', () => {
+      render(<GameResult lang="en" correct={7} total={10} onPlayAgain={() => {}} elapsedMs={42_000} elapsedFormat="clock" />);
+      expect(screen.getByTestId('game-result-time').textContent).toBe('in 0:42');
+    });
   });
 
   describe('secondaryAction (generic extra action — e.g. the worksheet overlay\'s own "Revisar respuestas")', () => {

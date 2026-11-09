@@ -159,7 +159,7 @@ describe('parseBlocks — quiz block: template (build item 2, template plumbing)
   });
 
   it('accepts every reserved template name', () => {
-    for (const template of ['match', 'reorder', 'cloze', 'groupsort']) {
+    for (const template of ['match', 'reorder', 'cloze', 'groupsort', 'choose']) {
       const result = parseBlocks([quizBlock({ template })]);
       expect((result as Block[])[0]).toMatchObject({ template });
     }
@@ -174,6 +174,59 @@ describe('parseBlocks — quiz block: template (build item 2, template plumbing)
     const result = parseBlocks([quizBlock({ template: 'bingo' })], 'draft');
     expect(result).not.toBeNull();
     expect((result as Block[])[0]).not.toHaveProperty('template');
+  });
+
+  it('keeps a "choose" block (Elegir la respuesta) intact through draft and submit: a Básico multiple-choice slot per question, its image and its "¿Por qué?"', () => {
+    const questionPath = uploadPath(USER, 'b2c3d4e5-0000-4000-8000-0000000000bb', 'question');
+    const chooseBlock = {
+      id: 'b1',
+      type: 'quiz',
+      template: 'choose',
+      payload: {
+        pools: {
+          'q1-options': [
+            { id: 'q1-a', text: "wasn't paying / was speaking" },
+            { id: 'q1-b', text: "wasn't paying / spoke" },
+            { id: 'q1-c', text: 'payed / spoke' },
+          ],
+        },
+        slots: [
+          {
+            id: 'q1',
+            label: 'I ___ attention while the teacher ___.',
+            input: 'choice',
+            pool: 'q1-options',
+            answer: ['q1-a'],
+            explanation: 'Both actions were in progress at the same time.',
+          },
+        ],
+      },
+      promptImages: { q1: { path: questionPath, width: 480, height: 360 } },
+    };
+
+    for (const mode of ['draft', 'submit'] as const) {
+      expect(parseBlocks([chooseBlock], mode)).toEqual([chooseBlock]);
+    }
+    expect(findIncompleteBlock(parseBlocks([chooseBlock])!)).toBeNull();
+  });
+
+  it('flags a "choose" question with a single option as incomplete, the same rule a Básico choice question follows', () => {
+    const draft = parseBlocks(
+      [
+        {
+          id: 'b1',
+          type: 'quiz',
+          template: 'choose',
+          payload: {
+            pools: { 'q1-options': [{ id: 'q1-a', text: 'goes' }] },
+            slots: [{ id: 'q1', label: 'She ___ to school.', input: 'choice', pool: 'q1-options', answer: ['q1-a'] }],
+          },
+        },
+      ],
+      'draft',
+    );
+    expect(draft).not.toBeNull();
+    expect(findIncompleteBlock(draft!)).toEqual({ blockId: 'b1', zoneId: 'q1', reason: 'quiz_too_few_options' });
   });
 
   it('rejects a non-string template in submit mode, ignores it in draft mode', () => {
@@ -1044,7 +1097,7 @@ describe('blockKind (0022 migration, activities.block_kinds)', () => {
     expect(blockKind(quizBlock() as unknown as QuizBlock)).toBe('basic');
   });
 
-  it.each(['match', 'reorder', 'cloze', 'groupsort'] as const)(
+  it.each(['match', 'reorder', 'cloze', 'groupsort', 'choose'] as const)(
     'is the template itself for a %s-molded quiz block',
     (template) => {
       expect(blockKind(quizBlock({ template }) as unknown as QuizBlock)).toBe(template);

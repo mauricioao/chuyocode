@@ -13,6 +13,7 @@ import { normalizeAnswer } from '@/lib/exerciseGrading';
 import { splitLabelAtBlank, type Payload, type Slot } from '@/lib/exercisePayload';
 import { isDropGap } from '@/lib/quizQuestionType';
 import { deriveClozeGameSentences } from './clozeSentences';
+import { deriveChooseQuestions } from './chooseQuestion';
 import type { QuizTemplate } from './blocks';
 
 /**
@@ -39,7 +40,8 @@ export interface GameItem {
  * (Verdadero o falso) and `openbox` (Caja sorpresa) are the Wordwall-style
  * "switch template" games added in batch 1, alongside the original
  * `cards`/`match`. `groupsort` ("Ordenar por grupos") is the big drag-each-
- * item-into-its-group board.
+ * item-into-its-group board. `choose` ("Elegir la respuesta") is one
+ * multiple-choice question per screen, big numbered cards.
  */
 export type GameMode =
   | 'quiz'
@@ -53,12 +55,14 @@ export type GameMode =
   | 'truefalse'
   | 'openbox'
   | 'cloze'
-  | 'groupsort';
+  | 'groupsort'
+  | 'choose';
 
 /**
  * Game modes that carry their OWN "Comprobar"/check affordance, built right
  * into the game screen itself (`match`'s big board, its own
- * `matching-check` button; `reorder`'s own per-sentence check). The
+ * `matching-check` button; `reorder`'s own per-sentence check; `choose`
+ * grades each pick the instant it is made). The
  * page-level combined Comprobar (`ActivityPracticeIsland`'s footer, and
  * `QuizLivePreview`'s own editor preview) must never show a SECOND one next
  * to it — build item 2, "One Comprobar".
@@ -68,6 +72,7 @@ export const SELF_CHECKING_GAME_MODES: ReadonlySet<GameMode> = new Set([
   'reorder',
   'cloze',
   'groupsort',
+  'choose',
 ]);
 
 /** `cards` is worth flipping through from a single item. */
@@ -489,6 +494,10 @@ export function boardHasContent(template: QuizTemplate, items: readonly GameItem
       return payload !== undefined && deriveClozeGameSentences(payload).length > 0;
     case 'groupsort':
       return payload !== undefined && deriveGroupSortGroups(payload).length > 0;
+    case 'choose':
+      // One playable question is a board: a sentence, two options with
+      // text and a correct answer among them (`deriveChooseQuestions`).
+      return payload !== undefined && deriveChooseQuestions(payload).length > 0;
   }
 }
 
@@ -524,14 +533,15 @@ export function modesForBlock(
  * Which {@link GameMode} a template WANTS to start in — `'match'` for the
  * `'match'` template ("Une las parejas"), `'reorder'` for the `'reorder'`
  * template ("Reordenar"), `'cloze'` for `'cloze'` ("Completar la frase"),
- * `'groupsort'` for `'groupsort'` ("Ordenar por grupos"); `undefined`
- * ("Básico") wants `'quiz'`.
+ * `'groupsort'` for `'groupsort'` ("Ordenar por grupos"), `'choose'` for
+ * `'choose'` ("Elegir la respuesta"); `undefined` ("Básico") wants `'quiz'`.
  */
 const TEMPLATE_DEFAULT_MODE: Record<QuizTemplate, GameMode> = {
   match: 'match',
   reorder: 'reorder',
   cloze: 'cloze',
   groupsort: 'groupsort',
+  choose: 'choose',
 };
 
 /**
@@ -571,6 +581,15 @@ function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * A `[0, 1)` random source seeded by `seed` — the same PRNG
+ * {@link shuffleWithSeed} uses, for a caller that shuffles through its own
+ * helper (`chooseQuestion.ts`'s `shuffleOptions`) rather than this one.
+ */
+export function seededRandom(seed: number): () => number {
+  return mulberry32(seed);
 }
 
 /**

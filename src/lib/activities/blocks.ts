@@ -145,9 +145,17 @@ export interface WorksheetBlock {
  * `undefined` = "Básico", the plain quiz template this field predates. Every
  * named template here has a shipped practice experience: `'match'` ("Une
  * las parejas"), `'reorder'` ("Reordenar"), `'cloze'` ("Completar la
- * frase") and `'groupsort'` ("Ordenar por grupos").
+ * frase"), `'groupsort'` ("Ordenar por grupos") and `'choose'` ("Elegir la
+ * respuesta").
+ *
+ * `'choose'` stores NOTHING new: each question is exactly a Básico
+ * multiple-choice slot (`input: 'choice'`, its own pool, `answer[0]` the
+ * correct pool item id, the optional `explanation`), its sentence in
+ * `label` with one or two `___` blanks, and its context image in
+ * {@link QuizBlock.promptImages} — see `./chooseQuestion` for how the
+ * player reads it.
  */
-export type QuizTemplate = 'match' | 'reorder' | 'cloze' | 'groupsort';
+export type QuizTemplate = 'match' | 'reorder' | 'cloze' | 'groupsort' | 'choose';
 
 /**
  * The five backdrop gradient presets a quiz block's background may use
@@ -268,7 +276,7 @@ export type BlocksParseMode = 'draft' | 'submit';
 
 const ZONE_KINDS: ReadonlySet<string> = new Set(['text', 'choice']);
 const ROTATIONS: ReadonlySet<number> = new Set([0, 90, 180, 270]);
-const QUIZ_TEMPLATES: ReadonlySet<string> = new Set(['match', 'reorder', 'cloze', 'groupsort']);
+const QUIZ_TEMPLATES: ReadonlySet<string> = new Set(['match', 'reorder', 'cloze', 'groupsort', 'choose']);
 const BACKDROP_PRESETS: ReadonlySet<string> = new Set(['sky', 'mint', 'sun', 'lavender', 'slate']);
 
 /** Narrow `unknown` to a plain object without trusting its keys. */

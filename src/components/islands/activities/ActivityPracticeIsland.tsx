@@ -815,6 +815,10 @@ export default function ActivityPracticeIsland({ lang, blocks, nextHref, guest }
           <div
             ref={setFocusModeContainer}
             data-testid="practice-focus-mode"
+            // Styling hook for a board that sizes itself differently here
+            // (`global.css`'s `.choose-sheet` drops its desk-window gutter:
+            // this view already pads the stage by 40px).
+            data-focus-mode=""
             // `[contain:layout]` (owner audit §c, same guarantee as
             // `ActivityStage`): makes this the EXPLICIT containing block for
             // `practice-focus-mode-actions` below, rather than relying on

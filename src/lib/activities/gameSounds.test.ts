@@ -6,6 +6,7 @@ import {
   playCorrect,
   playDrop,
   playFinish,
+  playNext,
   playPickUp,
   playWrong,
   useGameSound,
@@ -96,6 +97,18 @@ describe('gameSounds — pure cue scheduling', () => {
     expect(freqs).toEqual([...freqs].sort((a, b) => a - b));
     const starts = oscillators.map((o) => o.start.mock.calls[0]![0] as number);
     expect(starts).toEqual([...starts].sort((a, b) => a - b));
+  });
+
+  it('playNext schedules one short, soft tone — quieter and shorter than the "correct" cue it follows', () => {
+    const { ctx, oscillators, gains } = fakeContext();
+    playNext(ctx);
+    expect(oscillators).toHaveLength(1);
+    expect(oscillators[0]!.start).toHaveBeenCalledWith(10);
+    const duration = (oscillators[0]!.stop.mock.calls[0]![0] as number) - 10;
+    expect(duration).toBeGreaterThan(0);
+    expect(duration).toBeLessThanOrEqual(0.08);
+    const peakGain = gains[0]!.linearRampToValueAtTime.mock.calls[0]![0] as number;
+    expect(peakGain).toBeLessThan(0.07);
   });
 
   it('every scheduled tone ramps its gain up then back down to silence before it stops', () => {

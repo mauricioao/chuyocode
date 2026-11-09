@@ -1052,6 +1052,26 @@ export const UI_LABELS = {
         groupSortTrayLabel: 'Elementos disponibles',
         groupSortEmptyGroup: 'Grupo vacío',
         groupSortRemovePrefix: 'Quitar elemento',
+        // Elegir la respuesta (Wordwall/Kahoot-style quiz): one sentence per
+        // screen, big numbered option cards, instant ✓/✕.
+        modeChoose: 'Elegir la respuesta',
+        chooseTimerLabel: 'Tiempo',
+        chooseScoreLabel: 'Correctas',
+        // "3 de 10" — the position under the cards.
+        chooseOf: 'de',
+        chooseOptionsLabel: 'Opciones',
+        // Read in place of an empty `___` blank by a screen reader.
+        chooseBlank: 'espacio en blanco',
+        // The sr-only text beside the ✓/✕ icon on a marked card.
+        chooseCorrectMark: 'Correcta',
+        chooseWrongMark: 'Incorrecta',
+        // The polite live-region sentence after a pick.
+        chooseAnnounceCorrect: '¡Correcto!',
+        chooseAnnounceWrong: 'Incorrecto. La respuesta correcta es:',
+        chooseWhy: '¿Por qué?',
+        chooseNext: 'Siguiente',
+        chooseSoundMute: 'Silenciar sonido',
+        chooseSoundUnmute: 'Activar sonido',
       },
       // GameResult (build item N1, UX audit F2): the ONE shared end-of-round
       // screen for the four self-checking drag templates — see
@@ -1085,6 +1105,9 @@ export const UI_LABELS = {
         // "Tiempo: 1 min 23 s". Optional: a host with no `elapsedMs` never
         // renders this line at all.
         time: 'Tiempo',
+        // "en 2:05" — `GameResult`'s `elapsedFormat="clock"` line ("Elegir la
+        // respuesta"), under the score.
+        timeIn: 'en',
       },
       // Practice page (`/[lang]/ingles/actividades/[id]`, PR D "Activities
       // practice"). `WorksheetPlayer`'s own `player.*` copy above covers the
@@ -2661,6 +2684,20 @@ export const UI_LABELS = {
         groupSortTrayLabel: 'Available items',
         groupSortEmptyGroup: 'Empty group',
         groupSortRemovePrefix: 'Remove item',
+        modeChoose: 'Choose the answer',
+        chooseTimerLabel: 'Time',
+        chooseScoreLabel: 'Correct',
+        chooseOf: 'of',
+        chooseOptionsLabel: 'Options',
+        chooseBlank: 'blank',
+        chooseCorrectMark: 'Correct',
+        chooseWrongMark: 'Incorrect',
+        chooseAnnounceCorrect: 'Correct!',
+        chooseAnnounceWrong: 'Incorrect. The correct answer is:',
+        chooseWhy: 'Why?',
+        chooseNext: 'Next',
+        chooseSoundMute: 'Mute sound',
+        chooseSoundUnmute: 'Unmute sound',
       },
       gameResult: {
         perfect: 'Perfect!',
@@ -2675,6 +2712,7 @@ export const UI_LABELS = {
         guestInvite: 'Liked it? Create a free account to save your favorites and make your own.',
         guestSignUp: 'Create account',
         time: 'Time',
+        timeIn: 'in',
       },
       practice: {
         pageDescription: 'Practise this English activity: worksheets and questions with instant feedback.',

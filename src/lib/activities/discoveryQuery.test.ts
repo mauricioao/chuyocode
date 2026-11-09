@@ -32,6 +32,7 @@ describe('isBlockKindFilter', () => {
     expect(isBlockKindFilter('reorder')).toBe(true);
     expect(isBlockKindFilter('cloze')).toBe(true);
     expect(isBlockKindFilter('groupsort')).toBe(true);
+    expect(isBlockKindFilter('choose')).toBe(true);
   });
 
   // Owner decision 2026-10-19/-20: "Varios juegos" (the mold-less 'basic'

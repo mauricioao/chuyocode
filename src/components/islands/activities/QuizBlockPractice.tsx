@@ -68,6 +68,7 @@ import QuizTrueFalse from './QuizTrueFalse';
 import QuizOpenBox from './QuizOpenBox';
 import QuizCloze from './QuizCloze';
 import QuizGroupSort from './QuizGroupSort';
+import QuizChoose from './QuizChoose';
 import type { GameResultGuestInvite } from '@/components/islands/mechanics/GameResult';
 import { ACTIVITY_SHEET_CLASS } from '@/components/islands/mechanics/chip';
 
@@ -130,6 +131,7 @@ const SUPPORTED_MODES: readonly GameMode[] = [
   'openbox',
   'cloze',
   'groupsort',
+  'choose',
 ];
 
 export default function QuizBlockPractice({
@@ -189,7 +191,8 @@ export default function QuizBlockPractice({
     effectiveMode === 'truefalse' ||
     effectiveMode === 'openbox' ||
     effectiveMode === 'cloze' ||
-    effectiveMode === 'groupsort'
+    effectiveMode === 'groupsort' ||
+    effectiveMode === 'choose'
   ) {
     // The four big drag-and-drop games (visual-polish pass) stretch to fill
     // their stage — `flex-1 min-h-0` — so a short board/sentence can center
@@ -209,7 +212,8 @@ export default function QuizBlockPractice({
       effectiveMode === 'match' ||
       effectiveMode === 'reorder' ||
       effectiveMode === 'cloze' ||
-      effectiveMode === 'groupsort';
+      effectiveMode === 'groupsort' ||
+      effectiveMode === 'choose';
     return (
       <div
         data-testid={`quiz-practice-${block.id}`}
@@ -290,6 +294,19 @@ export default function QuizBlockPractice({
           <QuizGroupSort
             lang={lang}
             payload={payload}
+            seed={block.id}
+            nextHref={nextHref}
+            guest={guest}
+          />
+        )}
+        {/* "Elegir la respuesta" is one question at a time, so — unlike the
+            four boards above — it does show each question's own context
+            image (`block.promptImages`). */}
+        {effectiveMode === 'choose' && (
+          <QuizChoose
+            lang={lang}
+            payload={payload}
+            promptImages={block.promptImages}
             seed={block.id}
             nextHref={nextHref}
             guest={guest}

@@ -18,6 +18,7 @@ import {
   boardHasContent,
   nearestLockedMode,
   TEMPLATE_GAME_SWITCHING_ENABLED,
+  SELF_CHECKING_GAME_MODES,
   type GameItem,
   type GameMode,
   type TrueFalseItem,
@@ -417,6 +418,41 @@ describe('boardHasContent (T1, "molded previews show the real board, never Bási
 
   it('groupsort: false with no payload at all', () => {
     expect(boardHasContent('groupsort', [])).toBe(false);
+  });
+
+  describe('choose (Elegir la respuesta)', () => {
+    /** One multiple-choice question, stored exactly like a Básico choice slot. */
+    function chooseQuestion(label: string, options: string[], answer: string[] = ['o0']): Payload {
+      return payloadWith([{ id: 'q1', label, input: 'choice', pool: 'q1-options', answer }], {
+        'q1-options': options.map((text, i) => ({ id: `o${i}`, text })),
+      });
+    }
+
+    it('is playable from a single question with a sentence, two options and a correct answer', () => {
+      expect(boardHasContent('choose', [], chooseQuestion('She ___ to school.', ['goes', 'go']))).toBe(true);
+    });
+
+    it('is not playable with an empty sentence, a single option, or no correct answer', () => {
+      expect(boardHasContent('choose', [], chooseQuestion('  ', ['goes', 'go']))).toBe(false);
+      expect(boardHasContent('choose', [], chooseQuestion('She ___ to school.', ['goes']))).toBe(false);
+      expect(boardHasContent('choose', [], chooseQuestion('She ___ to school.', ['goes', 'go'], []))).toBe(false);
+    });
+
+    it('is not playable with no payload at all', () => {
+      expect(boardHasContent('choose', [])).toBe(false);
+    });
+
+    it('starts in its own game once playable, and in quiz while the board is still empty', () => {
+      const playable = chooseQuestion('She ___ to school.', ['goes', 'go']);
+      expect(initialGameMode('choose', deriveGameItems(playable), playable)).toBe('choose');
+      expect(modesForBlock(availableGameModes(deriveGameItems(playable), playable), 'choose', deriveGameItems(playable), playable)).toEqual(['choose']);
+      const empty = payloadWith([]);
+      expect(initialGameMode('choose', [], empty)).toBe('quiz');
+    });
+
+    it('checks its own answers, so the page never shows a second "Comprobar" next to it', () => {
+      expect(SELF_CHECKING_GAME_MODES.has('choose')).toBe(true);
+    });
   });
 });
 

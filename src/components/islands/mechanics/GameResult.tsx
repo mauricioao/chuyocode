@@ -52,9 +52,11 @@
  */
 import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
+import { TimerIcon } from '@phosphor-icons/react/dist/ssr/Timer';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { formatElapsedTime } from '@/lib/formatElapsedTime';
+import { formatElapsed } from '@/lib/activities/presentationQuiz';
 import { Button } from '@/components/ui/button';
 import {
   characterPoseFallbackSrc,
@@ -106,6 +108,14 @@ export interface GameResultProps {
    * renders no time line at all.
    */
   elapsedMs?: number;
+  /**
+   * How {@link elapsedMs} reads. `'label'` (default, the worksheet overlay
+   * and every caller before this option): "Tiempo: 1 min 23 s".
+   * `'clock'` ("Elegir la respuesta", whose board shows a running ⏱ m:ss
+   * timer): a small stopwatch and "en 2:05", the same m:ss the timer pill
+   * showed, right under the score line.
+   */
+  elapsedFormat?: 'label' | 'clock';
   /** One extra secondary action, rendered in the same row as "Jugar de nuevo"/"Repasar las que fallé" — see {@link GameResultSecondaryAction}. */
   secondaryAction?: GameResultSecondaryAction;
   /**
@@ -292,6 +302,7 @@ export default function GameResult({
   nextHref,
   guest,
   elapsedMs,
+  elapsedFormat = 'label',
   secondaryAction,
   characterPlacement = 'inline',
   characterPortalContainer,
@@ -496,11 +507,22 @@ export default function GameResult({
           <p data-testid="game-result-score" className="text-base text-foreground sm:text-lg">
             {correct} {t.of} {total} {word}
           </p>
-          {typeof elapsedMs === 'number' && (
-            <p data-testid="game-result-time" className="text-sm text-muted-foreground">
-              {t.time}: {formatElapsedTime(elapsedMs)}
-            </p>
-          )}
+          {typeof elapsedMs === 'number' &&
+            (elapsedFormat === 'clock' ? (
+              <p
+                data-testid="game-result-time"
+                // Tucked under the score line it belongs to (maquette
+                // `propuestas/elegir-respuesta` G: `margin-top: -10px`).
+                className="-mt-2 inline-flex items-center gap-1.5 text-sm tabular-nums text-muted-foreground"
+              >
+                <TimerIcon aria-hidden="true" size={15} weight="bold" />
+                {t.timeIn} {formatElapsed(elapsedMs)}
+              </p>
+            ) : (
+              <p data-testid="game-result-time" className="text-sm text-muted-foreground">
+                {t.time}: {formatElapsedTime(elapsedMs)}
+              </p>
+            ))}
           <div className="flex flex-col items-center gap-2">
             {nextHref ? (
               <Button asChild className="min-h-11">
