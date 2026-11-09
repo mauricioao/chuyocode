@@ -42,9 +42,9 @@ describe('pose framing (GameResult "equal head size" sizing)', () => {
   it('gives every GameResult outcome pose a framing with headTop/chin/abdomen fractions, in that order down the body', () => {
     for (const pose of GAME_RESULT_OUTCOME_POSES) {
       // Goes through the public `characterPoseFraming` (never reaches into
-      // `RESULT_POSE_FRAMING` directly) — it's typed to exactly the 3
+      // `RESULT_POSE_FRAMING` directly) — it's typed to exactly the 4
       // outcome-pose keys, so every `GAME_RESULT_OUTCOME_POSES` entry
-      // resolving without throwing already proves the map covers all 3.
+      // resolving without throwing already proves the map covers all 4.
       const framing = characterPoseFraming(pose);
       expect(framing.headTop).toBeGreaterThanOrEqual(0);
       expect(framing.headTop).toBeLessThan(1);
@@ -64,10 +64,39 @@ describe('pose framing (GameResult "equal head size" sizing)', () => {
     }
   });
 
+  // Head-size bugfix (owner report, `plantillas-feel/final/vanina-*-390x844.
+  // png`: the "¡Muy bien!" head rendered ~1.5x the "¡Perfecto!" one, "¡Casi!"
+  // ~1.17x): every chin re-measured from the masters with ONE method — the
+  // lowest row of the face's own skin — instead of the old mix of methods
+  // that put `pulgar-arriba`'s "chin" at eye level. See RESULT_POSE_FRAMING.
   it('characterPoseFraming returns the same values as the registry', () => {
-    expect(characterPoseFraming('vanina/celebra')).toEqual({ headTop: 0.067, chin: 0.27, abdomen: 0.47 });
-    expect(characterPoseFraming('vanina/pulgar-arriba')).toEqual({ headTop: 0.019, chin: 0.285, abdomen: 1 });
-    expect(characterPoseFraming('vanina/casi')).toEqual({ headTop: 0.019, chin: 0.3, abdomen: 0.78 });
+    expect(characterPoseFraming('vanina/celebra')).toEqual({ headTop: 0.067, chin: 0.266, abdomen: 0.47 });
+    expect(characterPoseFraming('vanina/pulgar-arriba')).toEqual({ headTop: 0.019, chin: 0.425, abdomen: 1 });
+    expect(characterPoseFraming('vanina/casi')).toEqual({ headTop: 0.019, chin: 0.352, abdomen: 0.78 });
+    expect(characterPoseFraming('vanina/animo')).toEqual({ headTop: 0.019, chin: 0.385, abdomen: 0.87 });
+  });
+
+  // Owner-approved 4th tier: below 40% Vanina cheers the learner on.
+  it('registers vanina/animo as a GameResult outcome pose, exported at the same display height as the other three', () => {
+    expect(GAME_RESULT_OUTCOME_POSES).toContain('vanina/animo');
+    expect(CHARACTER_POSES['vanina/animo']).toEqual({
+      character: 'vanina',
+      slug: 'animo',
+      widths: [314, 628],
+      flushEdge: null,
+    });
+  });
+
+  it('keeps every outcome pose\'s framing within (0, 1] and ordered headTop < chin < abdomen', () => {
+    for (const pose of GAME_RESULT_OUTCOME_POSES) {
+      const { headTop, chin, abdomen } = characterPoseFraming(pose);
+      for (const value of [headTop, chin, abdomen]) {
+        expect(value, pose).toBeGreaterThan(0);
+        expect(value, pose).toBeLessThanOrEqual(1);
+      }
+      expect(headTop, pose).toBeLessThan(chin);
+      expect(chin, pose).toBeLessThan(abdomen);
+    }
   });
 
   it('gives pulgar-arriba an abdomen of exactly 1 — its bust-shot canvas never reaches a real abdomen, so the crop rests on its own bottom edge instead of an extrapolated guess (bugfix: that guess used to inflate her whole image, head included, ~25% bigger than the other two outcome poses)', () => {
@@ -159,7 +188,7 @@ describe('preloadCharacterPoses', () => {
     expect(() => fresh.preloadCharacterPoses()).not.toThrow();
   });
 
-  it('warms both avif and webp srcset candidates for all 3 GameResult outcome poses', async () => {
+  it('warms both avif and webp srcset candidates for all 4 GameResult outcome poses', async () => {
     vi.resetModules();
     const instances = stubImageConstructor();
     const fresh = await import('./characterPoses');

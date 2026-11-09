@@ -150,7 +150,8 @@ describe('QuizMatching', () => {
       act(() => vi.advanceTimersByTime(1000));
 
       expect(screen.getByTestId('game-result-score').textContent).toBe('1 de 3 correctas');
-      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('retry');
+      // 1 of 3 is under 40%: the "¡Tú puedes!" tier, not "¡Casi!".
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('encourage');
     });
 
     describe('✓/✕ marks (UX audit F10: correct/wrong must not rely on colour alone)', () => {

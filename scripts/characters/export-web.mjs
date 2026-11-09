@@ -66,6 +66,7 @@ const POSES = [
   { character: 'vanina', slug: 'celebra', displayHeightCss: 448 }, // GameResult: perfect
   { character: 'vanina', slug: 'pulgar-arriba', displayHeightCss: 448 }, // GameResult: good ("¡Muy bien!")
   { character: 'vanina', slug: 'casi', displayHeightCss: 448 }, // GameResult: retry ("¡Casi! Sigue practicando")
+  { character: 'vanina', slug: 'animo', displayHeightCss: 448 }, // GameResult: encourage (<40%, "¡Tú puedes! Repasa las que fallaste")
   { character: 'vanina', slug: 'asoma-izquierda', displayHeightCss: 100 }, // peeking from the exercise window's outer left edge, desktop only
   { character: 'paco', slug: 'sentado-borde', displayHeightCss: 140 }, // sitting on a desk widget's top edge
 ];

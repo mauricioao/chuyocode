@@ -6,18 +6,18 @@
  * here; every color/shadow/radius comes straight from the UI kit's existing
  * tokens/classes (`Button`, `text-success-strong`, …) — nothing new.
  *
- * OUTCOME BY SCORE, not a fixed "well done": all correct -> "¡Perfecto!";
- * at least 70% -> "¡Muy bien!"; otherwise -> "¡Casi! Sigue practicando".
- * `data-outcome` carries this (`perfect`/`good`/`retry`) so a later pass can
- * hook a character's reaction to it (Vanina) — this component does not
- * render any character itself.
+ * OUTCOME BY SCORE, not a fixed "well done" (4 tiers, owner-approved with
+ * the "Elegir la respuesta" maquette, screen G): all correct ->
+ * "¡Perfecto!"; at least 70% -> "¡Muy bien!"; at least 40% -> "¡Casi! Sigue
+ * practicando"; below 40% -> "¡Tú puedes! Repasa las que fallaste".
+ * `data-outcome` carries this (`perfect`/`good`/`retry`/`encourage`).
  *
  * ONE PRIMARY ACTION: "Otra actividad" (a real link to `nextHref`) when the
  * host supplies one — only the practice page does, pointed at the community
  * catalog filtered by this activity's own level; otherwise "Jugar de nuevo"
  * IS the primary action. The editor preview and any other host pass neither
  * `nextHref` nor `guest`, so they only ever see the one "Jugar de nuevo"
- * button.
+ * button. The one exception is `encourage` with a review handler (below).
  *
  * "Repasar las que fallé" is the HOST's call, not this component's: it only
  * renders when `onReviewWrong` is actually supplied AND the round ended
@@ -25,6 +25,9 @@
  * mistakes (every one of the other three self-checking games only ever
  * reaches "done" at 100%, unlike `QuizMatching`'s single-shot check) never
  * passes a handler, so the button never renders there regardless of score.
+ * Below 40% (`encourage`) it becomes THE primary (filled) action — the
+ * headline itself asks for it — and "Otra actividad"/"Jugar de nuevo" drop
+ * into the secondary link row; every other tier keeps the order above.
  *
  * GUEST INVITE: the host passes `guest` only on the practice page, for an
  * anonymous visitor — this is also where the OLD page-top guest banner now
@@ -34,8 +37,7 @@
  * VANINA REACTS TO THE OUTCOME (visual-polish pass, owner-approved cast
  * split, DIRECCION-VISUAL.md §4.2 "reacciona a Comprobar" — replacing the
  * generic colored check/retry icon this doc comment used to describe here):
- * `perfect` (all correct) -> `celebra`; `good` (≥70%) -> `casi`; `retry`
- * (<70%, including a first attempt that failed outright) -> `animo`. Pure
+ * one pose per tier, see {@link OUTCOME_POSE}. Pure
  * black-ink line art (DIRECCION-VISUAL.md §4.1), decorative only — `alt=""`
  * + `aria-hidden`, the outcome is already carried in the headline text and
  * `data-outcome` for anything that needs it programmatically.
@@ -67,7 +69,7 @@ import {
 } from '@/content/characterPoses';
 import { ActivityPreviewContext } from '@/components/islands/activities/ActivityPreviewFrame';
 
-export type GameResultOutcome = 'perfect' | 'good' | 'retry';
+export type GameResultOutcome = 'perfect' | 'good' | 'retry' | 'encourage';
 
 export interface GameResultGuestInvite {
   /** Same destination the old top banner used — `/{lang}/auth/entrar?mode=signup&next=<current path>`. */
@@ -160,10 +162,16 @@ export interface GameResultProps {
   nextHrefInert?: boolean;
 }
 
-/** All correct -> "perfect"; at least 70% -> "good"; otherwise -> "retry" (owner spec, build item N1). */
+/**
+ * All correct -> "perfect"; at least 70% -> "good"; at least 40% -> "retry";
+ * below that -> "encourage" (owner spec, build item N1 + the 4th tier from
+ * the "Elegir la respuesta" maquette, screen G).
+ */
 function outcomeFor(correct: number, total: number): GameResultOutcome {
   if (total <= 0 || correct >= total) return 'perfect';
-  return correct / total >= 0.7 ? 'good' : 'retry';
+  const ratio = correct / total;
+  if (ratio >= 0.7) return 'good';
+  return ratio >= 0.4 ? 'retry' : 'encourage';
 }
 
 /**
@@ -171,12 +179,14 @@ function outcomeFor(correct: number, total: number): GameResultOutcome {
  * OWN headline, not just its score tier (owner feedback, UI round 2: "casi"
  * — hand on head, oops face — showed for "good"/"¡Muy bien!", contradicting
  * the text). `perfect` -> `celebra`; `good` ("¡Muy bien!") -> `pulgar-
- * arriba`; `retry` ("¡Casi! Sigue practicando") -> `casi`.
+ * arriba`; `retry` ("¡Casi! Sigue practicando") -> `casi`; `encourage`
+ * ("¡Tú puedes! Repasa las que fallaste") -> `animo`, both fists up.
  */
 export const OUTCOME_POSE: Record<GameResultOutcome, CharacterPoseKey> = {
   perfect: 'vanina/celebra',
   good: 'vanina/pulgar-arriba',
   retry: 'vanina/casi',
+  encourage: 'vanina/animo',
 };
 
 /**
@@ -192,9 +202,9 @@ const VANINA_READY_FALLBACK_MS = 1200;
 /**
  * Confetti burst (visual-polish pass, owner spec: "confetti que sale de los
  * costados" timed to land as Vanina pops up) — `perfect`/`good` only, never
- * `retry` (a near-miss is not a celebration). Small pieces shooting from the
- * result area's own left/right edges, inward and up, then falling and
- * fading — pure CSS (`global.css`'s own `.game-result-confetti-piece`
+ * `retry`/`encourage` (a miss is not a celebration). Small pieces shooting
+ * from the result area's own left/right edges, inward and up, then falling
+ * and fading — pure CSS (`global.css`'s own `.game-result-confetti-piece`
  * keyframe), gated behind `prefers-reduced-motion: no-preference` there, no
  * new dependency.
  */
@@ -317,9 +327,12 @@ export default function GameResult({
   const insidePreview = useContext(ActivityPreviewContext);
   const inert = nextHrefInert || insidePreview;
   const outcome = outcomeFor(correct, total);
-  const headline = outcome === 'perfect' ? t.perfect : outcome === 'good' ? t.good : t.retry;
+  const headline = t[outcome];
   const word = resultWord ?? t.defaultWord;
   const showReview = correct < total && Boolean(onReviewWrong);
+  // Below 40% the headline itself asks for a review, so — when the host can
+  // actually review — it becomes THE filled button (owner-approved).
+  const reviewIsPrimary = outcome === 'encourage' && showReview;
   const pose = OUTCOME_POSE[outcome];
   const poseFraming = characterPoseFraming(pose);
   const showConfetti = CONFETTI_OUTCOMES.has(outcome);
@@ -466,6 +479,29 @@ export default function GameResult({
     </>
   );
 
+  // "Otra actividad" — the filled primary in every tier but `encourage` with
+  // a review handler, where it drops into the secondary link row. Bugfix
+  // (owner report): inside a desk window, this used to be a plain in-iframe
+  // navigation — the host's own click-race defensive net
+  // (`deskWindowManager.ts`) then opened the community route as a SEPARATE
+  // window and bounced this frame back onto its own href, leaving the
+  // finished activity window open, reloading, behind it.
+  // `data-desk-open-window="replace"` is the embedded-side opener's own
+  // marker (`@lib/ui/deskWindow.ts#initDeskOpenWindowLinks`): it asks the
+  // host to open/focus the community window AND close THIS one. Outside a
+  // desk window (standalone page, mobile, guest) the attribute is inert — it
+  // stays the exact plain link it always was.
+  const nextLink = nextHref ? (
+    <a
+      href={nextHref}
+      data-testid="game-result-next"
+      data-desk-open-window="replace"
+      onClick={inert ? (event) => event.preventDefault() : undefined}
+    >
+      {t.nextActivity}
+    </a>
+  ) : null;
+
   return (
     <>
       <div
@@ -524,29 +560,13 @@ export default function GameResult({
               </p>
             ))}
           <div className="flex flex-col items-center gap-2">
-            {nextHref ? (
+            {reviewIsPrimary ? (
+              <Button type="button" data-testid="game-result-review" className="min-h-11" onClick={onReviewWrong}>
+                {t.reviewWrong}
+              </Button>
+            ) : nextLink ? (
               <Button asChild className="min-h-11">
-                {/* "Otra actividad" bugfix (owner report): inside a desk
-                    window, this used to be a plain in-iframe navigation —
-                    the host's own click-race defensive net
-                    (`deskWindowManager.ts`) then opened the community route
-                    as a SEPARATE window and bounced this frame back onto its
-                    own href, leaving the finished activity window open,
-                    reloading, behind it. `data-desk-open-window="replace"`
-                    is the embedded-side opener's own marker
-                    (`@lib/ui/deskWindow.ts#initDeskOpenWindowLinks`): it asks
-                    the host to open/focus the community window AND close
-                    THIS one. Outside a desk window (standalone page, mobile,
-                    guest) the attribute is inert — it stays the exact plain
-                    link it always was. */}
-                <a
-                  href={nextHref}
-                  data-testid="game-result-next"
-                  data-desk-open-window="replace"
-                  onClick={inert ? (event) => event.preventDefault() : undefined}
-                >
-                  {t.nextActivity}
-                </a>
+                {nextLink}
               </Button>
             ) : (
               <Button type="button" data-testid="game-result-play-again" className="min-h-11" onClick={onPlayAgain}>
@@ -555,7 +575,7 @@ export default function GameResult({
             )}
             {(showReview || nextHref || secondaryAction) && (
               <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-                {showReview && (
+                {showReview && !reviewIsPrimary && (
                   <Button
                     type="button"
                     variant="link"
@@ -566,7 +586,12 @@ export default function GameResult({
                     {t.reviewWrong}
                   </Button>
                 )}
-                {nextHref && (
+                {reviewIsPrimary && nextLink && (
+                  <Button asChild variant="link" className="min-h-11 px-2">
+                    {nextLink}
+                  </Button>
+                )}
+                {(nextHref || reviewIsPrimary) && (
                   <Button
                     type="button"
                     variant="link"

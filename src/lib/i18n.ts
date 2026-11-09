@@ -1081,6 +1081,10 @@ export const UI_LABELS = {
         perfect: '¡Perfecto!',
         good: '¡Muy bien!',
         retry: '¡Casi! Sigue practicando',
+        // Below 40% (owner-approved 4th tier): Vanina cheers the learner on
+        // and points at the misses — "Repasar las que fallé" is then the
+        // primary button when the template can review them.
+        encourage: '¡Tú puedes! Repasa las que fallaste',
         // "4 de 5 ___" — shared "de". Matching supplies its own last word
         // (`matchResultCorrect`, "correctas"); Reorder/Cloze/GroupSort use
         // `firstTryWord` below instead (they can only ever end at 100% of
@@ -2703,6 +2707,7 @@ export const UI_LABELS = {
         perfect: 'Perfect!',
         good: 'Well done!',
         retry: 'Almost! Keep practicing',
+        encourage: 'You can do it! Review the ones you missed',
         of: 'of',
         defaultWord: 'correct',
         firstTryWord: 'on the first try',

@@ -32,6 +32,30 @@ describe('GameResult', () => {
       expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe('retry');
       expect(screen.getByText('¡Casi! Sigue practicando')).toBeTruthy();
     });
+
+    // Owner-approved 4th tier (maquette `propuestas/elegir-respuesta` G):
+    // below 40% Vanina cheers the learner on instead of "¡Casi!". Every tier
+    // checked right at its own boundaries — headline, pose and confetti
+    // (confetti for `perfect`/`good` only, exactly as before).
+    it.each([
+      [10, 10, 'perfect', '¡Perfecto!', 'vanina/celebra', true],
+      [70, 100, 'good', '¡Muy bien!', 'vanina/pulgar-arriba', true],
+      [69, 100, 'retry', '¡Casi! Sigue practicando', 'vanina/casi', false],
+      [40, 100, 'retry', '¡Casi! Sigue practicando', 'vanina/casi', false],
+      [39, 100, 'encourage', '¡Tú puedes! Repasa las que fallaste', 'vanina/animo', false],
+      [0, 10, 'encourage', '¡Tú puedes! Repasa las que fallaste', 'vanina/animo', false],
+    ] as const)('%s of %s correct -> "%s": headline, pose and confetti', (correct, total, outcome, headline, pose, confetti) => {
+      render(<GameResult lang="es" correct={correct} total={total} onPlayAgain={() => {}} />);
+      expect(screen.getByTestId('game-result').getAttribute('data-outcome')).toBe(outcome);
+      expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(headline);
+      expect(screen.getByTestId('game-result-icon').getAttribute('data-outcome-pose')).toBe(pose);
+      expect(screen.queryByTestId('game-result-confetti') !== null).toBe(confetti);
+    });
+
+    it('renders the English "encourage" headline for lang="en"', () => {
+      render(<GameResult lang="en" correct={1} total={10} onPlayAgain={() => {}} />);
+      expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('You can do it! Review the ones you missed');
+    });
   });
 
   describe('score line', () => {
@@ -230,6 +254,92 @@ describe('GameResult', () => {
     });
   });
 
+  // Owner-approved: below 40% ("encourage") the most useful next step is
+  // reviewing the misses, so "Repasar las que fallé" becomes the ONE filled
+  // button and "Otra actividad" drops into the secondary link row. Only when
+  // the host can actually review (`onReviewWrong`); every other tier keeps
+  // today's buttons and order.
+  describe('primary action below 40% ("encourage")', () => {
+    const NEXT = '/es/ingles/actividades?nivel=a1';
+
+    /** The filled (primary) button first, then the secondary link row, in DOM order. */
+    function actions() {
+      const content = screen.getByTestId('game-result-content');
+      return Array.from(content.querySelectorAll<HTMLElement>('[data-slot="button"]')).map((el) => ({
+        testId: el.getAttribute('data-testid'),
+        variant: el.getAttribute('data-variant'),
+      }));
+    }
+
+    it('makes "Repasar las que fallé" the filled primary and "Otra actividad" a secondary link', () => {
+      const onReviewWrong = vi.fn();
+      render(<GameResult lang="es" correct={3} total={10} nextHref={NEXT} onPlayAgain={() => {}} onReviewWrong={onReviewWrong} />);
+      expect(actions()).toEqual([
+        { testId: 'game-result-review', variant: 'default' },
+        { testId: 'game-result-next', variant: 'link' },
+        { testId: 'game-result-play-again', variant: 'link' },
+      ]);
+      expect(screen.getByTestId('game-result-review').textContent).toBe('Repasar las que fallé');
+      fireEvent.click(screen.getByTestId('game-result-review'));
+      expect(onReviewWrong).toHaveBeenCalledOnce();
+    });
+
+    it('keeps the secondary "Otra actividad" a real link that also closes the desk window', () => {
+      render(<GameResult lang="es" correct={3} total={10} nextHref={NEXT} onPlayAgain={() => {}} onReviewWrong={() => {}} />);
+      const next = screen.getByTestId('game-result-next');
+      expect(next.tagName).toBe('A');
+      expect(next.getAttribute('href')).toBe(NEXT);
+      expect(next.textContent).toBe('Otra actividad');
+      expect(next.getAttribute('data-desk-open-window')).toBe('replace');
+      expect(next.className).toContain('min-h-11');
+      expect(fireEvent.click(next)).toBe(true);
+    });
+
+    it('keeps the secondary "Otra actividad" inert inside the editor preview', () => {
+      render(
+        <GameResult lang="es" correct={3} total={10} nextHref={NEXT} nextHrefInert onPlayAgain={() => {}} onReviewWrong={() => {}} />,
+      );
+      expect(fireEvent.click(screen.getByTestId('game-result-next'))).toBe(false);
+    });
+
+    it('with no `nextHref`, puts "Jugar de nuevo" in the secondary row under the filled "Repasar las que fallé"', () => {
+      render(<GameResult lang="es" correct={3} total={10} onPlayAgain={() => {}} onReviewWrong={() => {}} />);
+      expect(actions()).toEqual([
+        { testId: 'game-result-review', variant: 'default' },
+        { testId: 'game-result-play-again', variant: 'link' },
+      ]);
+    });
+
+    it('leaves today\'s buttons untouched below 40% when the host passes no `onReviewWrong`', () => {
+      render(<GameResult lang="es" correct={3} total={10} nextHref={NEXT} onPlayAgain={() => {}} />);
+      expect(actions()).toEqual([
+        { testId: 'game-result-next', variant: 'default' },
+        { testId: 'game-result-play-again', variant: 'link' },
+      ]);
+    });
+
+    it.each([
+      ['retry', 4, 10],
+      ['retry', 69, 100],
+      ['good', 7, 10],
+    ] as const)('leaves today\'s buttons and order untouched for "%s" (%s of %s) even with `onReviewWrong`', (_outcome, correct, total) => {
+      render(<GameResult lang="es" correct={correct} total={total} nextHref={NEXT} onPlayAgain={() => {}} onReviewWrong={() => {}} />);
+      expect(actions()).toEqual([
+        { testId: 'game-result-next', variant: 'default' },
+        { testId: 'game-result-review', variant: 'link' },
+        { testId: 'game-result-play-again', variant: 'link' },
+      ]);
+    });
+
+    it('leaves the perfect tier untouched (no review button at all)', () => {
+      render(<GameResult lang="es" correct={10} total={10} nextHref={NEXT} onPlayAgain={() => {}} onReviewWrong={() => {}} />);
+      expect(actions()).toEqual([
+        { testId: 'game-result-next', variant: 'default' },
+        { testId: 'game-result-play-again', variant: 'link' },
+      ]);
+    });
+  });
+
   describe('guest invite', () => {
     it('is omitted for a signed-in host (no `guest` prop)', () => {
       render(<GameResult lang="es" correct={3} total={3} onPlayAgain={() => {}} />);
@@ -272,9 +382,15 @@ describe('GameResult', () => {
     });
 
     it('shows "casi" for "retry" ("¡Casi! Sigue practicando") — never a celebratory pose', () => {
-      render(<GameResult lang="es" correct={2} total={10} onPlayAgain={() => {}} />);
+      render(<GameResult lang="es" correct={5} total={10} onPlayAgain={() => {}} />);
       const icon = screen.getByTestId('game-result-icon');
       expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/casi');
+    });
+
+    it('shows "animo" for "encourage" ("¡Tú puedes! Repasa las que fallaste")', () => {
+      render(<GameResult lang="es" correct={2} total={10} onPlayAgain={() => {}} />);
+      const icon = screen.getByTestId('game-result-icon');
+      expect(icon.getAttribute('data-outcome-pose')).toBe('vanina/animo');
     });
 
     it('is decorative only (empty alt, aria-hidden) — the outcome already carries in the headline and data-outcome', () => {
@@ -320,7 +436,8 @@ describe('GameResult', () => {
     it.each([
       ['perfect', 3, 3, 'vanina/celebra'],
       ['good', 7, 10, 'vanina/pulgar-arriba'],
-      ['retry', 2, 10, 'vanina/casi'],
+      ['retry', 5, 10, 'vanina/casi'],
+      ['encourage', 2, 10, 'vanina/animo'],
     ] as const)('sets --pose-head/--pose-chin/--pose-abdomen inline for the "%s" outcome, matching %s\'s own registry framing', (_outcome, correct, total, poseKey) => {
       render(<GameResult lang="es" correct={correct} total={total} onPlayAgain={() => {}} />);
       const icon = screen.getByTestId('game-result-icon');
@@ -330,10 +447,11 @@ describe('GameResult', () => {
       expect(icon.style.getPropertyValue('--pose-abdomen')).toBe(String(framing.abdomen));
     });
 
-    it('uses the SAME sizing class (and so the same CSS formula) for all 3 outcome poses — only the inline fractions differ', () => {
+    it('uses the SAME sizing class (and so the same CSS formula) for all 4 outcome poses — only the inline fractions differ', () => {
       for (const [correct, total] of [
         [3, 3],
         [7, 10],
+        [5, 10],
         [2, 10],
       ] as const) {
         const { unmount } = render(<GameResult lang="es" correct={correct} total={total} onPlayAgain={() => {}} />);
@@ -410,6 +528,11 @@ describe('GameResult', () => {
     });
 
     it('omits the confetti layer entirely for a retry outcome', () => {
+      render(<GameResult lang="es" correct={5} total={10} onPlayAgain={() => {}} />);
+      expect(screen.queryByTestId('game-result-confetti')).toBeNull();
+    });
+
+    it('omits the confetti layer entirely for an encourage outcome', () => {
       render(<GameResult lang="es" correct={2} total={10} onPlayAgain={() => {}} />);
       expect(screen.queryByTestId('game-result-confetti')).toBeNull();
     });
@@ -543,7 +666,7 @@ describe('GameResult', () => {
     });
 
     it('"portal" still omits confetti for a retry outcome, same as inline', () => {
-      render(<GameResult lang="es" correct={2} total={10} onPlayAgain={() => {}} characterPlacement="portal" />);
+      render(<GameResult lang="es" correct={5} total={10} onPlayAgain={() => {}} characterPlacement="portal" />);
       expect(screen.queryByTestId('game-result-confetti')).toBeNull();
     });
 

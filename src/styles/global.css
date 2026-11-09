@@ -1937,10 +1937,14 @@ h3 {
  * `GameResult.tsx`, from that pose's own `characterPoseFraming`
  * (`characterPoses.ts`) — the fraction of ITS OWN master image that's
  * hair-top, chin, and abdomen-line respectively. `--vanina-head` below is
- * the TARGET visible HEAD height, per breakpoint (derived from `celebra`'s
- * and `casi`'s own on-screen head size under the PREVIOUS formula — the two
- * outcomes that already looked right — so neither changes size here; only
- * `pulgar-arriba` shrinks back down to match). `height` divides the target
+ * the TARGET visible HEAD height, per breakpoint (first derived from
+ * `celebra`'s and `casi`'s own on-screen head size under the PREVIOUS
+ * formula). Head-size bugfix: that only holds when every pose's own
+ * fractions really are its hair top and jaw — `pulgar-arriba`'s "chin" sat
+ * on her eyes and `casi`'s on her mouth, so their heads still rendered
+ * ~1.5x/~1.17x `celebra`'s; all 4 outcome poses are now measured with one
+ * method (`characterPoses.ts`), which leaves `celebra` (whose chin was
+ * already right) at this same target size. `height` divides the target
  * by a pose's own head-top-to-chin fraction, which cancels back out to
  * EXACTLY `--vanina-head` on screen for every pose (immune to the
  * extrapolation failure above — no pose's own head-to-chin fraction can be
