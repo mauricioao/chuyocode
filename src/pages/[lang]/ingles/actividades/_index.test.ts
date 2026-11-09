@@ -67,6 +67,55 @@ async function render(
   });
 }
 
+/**
+ * The filters panel's own markup (`CommunityFiltersPanel`): the search form
+ * carries hidden copies of the same params, so a panel assertion never reads
+ * the whole page.
+ */
+function filtersPanel(html: string): string {
+  const start = html.indexOf('data-testid="filters-popover"');
+  expect(start).toBeGreaterThan(-1);
+  return html.slice(start, html.indexOf('</details>', start));
+}
+
+/** The visible text of one capsule dropdown, by its test id (the server render of the island). */
+function capsuleText(html: string, testId: string): string {
+  const match = html.match(new RegExp(`<button[^>]*data-testid="${testId}"[^>]*>([\\s\\S]*?)</button>`));
+  expect(match).not.toBeNull();
+  return match![1]!.replace(/<[^>]+>/g, '').trim();
+}
+
+type FilterOption = { value: string; label: string };
+type FiltersIslandProps = { allLevelsLabel: string; typeOptions: FilterOption[]; sortOptions: FilterOption[] };
+
+/**
+ * The props the page hands `CommunityFiltersIsland` — what its lists offer
+ * once open (a closed list renders no options on the server). Decoded from
+ * the island's `props` attribute: Astro's own `[type, value]` pairs, `0` a
+ * plain value or object, `1` an array.
+ */
+function filtersIslandProps(html: string): FiltersIslandProps {
+  const tag = html.match(/<astro-island[^>]*component-url="[^"]*CommunityFiltersIsland"[^>]*>/)?.[0];
+  const raw = tag?.match(/\sprops="([^"]*)"/)?.[1];
+  expect(raw).toBeDefined();
+  const json = raw!
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+  const revive = (entry: unknown): unknown => {
+    const [type, value] = entry as [number, unknown];
+    if (type === 1) return (value as unknown[]).map(revive);
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, revive(inner)]));
+    }
+    return value;
+  };
+  const props = JSON.parse(json) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(props).map(([key, entry]) => [key, revive(entry)])) as FiltersIslandProps;
+}
+
 function card(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'act-1',
@@ -323,16 +372,67 @@ describe('GET /[lang]/ingles/actividades — filter bar reflects the current URL
     expect(html).toContain('value="present simple"');
   });
 
-  it('marks the active level option selected', async () => {
+  // The panel's three fields are capsule dropdowns (`CommunityFiltersIsland`,
+  // owner approval 2026-11-09): the server render shows the current value in
+  // each capsule, and the form carries it in a hidden field under the same
+  // name the native select had.
+  it('shows the active level in its capsule and carries it in the panel form', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades?nivel=B1', { params: { lang: 'es' } });
-    const html = await res.text();
-    expect(html).toMatch(/<option value="B1" selected/);
+    const panel = filtersPanel(await res.text());
+    expect(capsuleText(panel, 'filters-level')).toBe('Intermedio B1');
+    expect(panel).toMatch(/<input type="hidden" name="nivel" value="B1"/);
   });
 
-  it('marks the active sort option selected', async () => {
+  it('shows the active sort in its capsule and carries it in the panel form', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades?orden=vistas', { params: { lang: 'es' } });
-    const html = await res.text();
-    expect(html).toMatch(/<option value="vistas" selected/);
+    const panel = filtersPanel(await res.text());
+    expect(capsuleText(panel, 'filters-sort')).toBe('Más vistas');
+    expect(panel).toMatch(/<input type="hidden" name="orden" value="vistas"/);
+  });
+
+  it('with nothing filtering, shows the defaults and carries the same empty values the native selects sent', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const panel = filtersPanel(await res.text());
+    expect(capsuleText(panel, 'filters-level')).toBe('Todos los niveles');
+    expect(capsuleText(panel, 'filters-type')).toBe('Todos');
+    expect(capsuleText(panel, 'filters-sort')).toBe('Más recientes');
+    expect(panel).toMatch(/<input type="hidden" name="nivel" value=""/);
+    expect(panel).toMatch(/<input type="hidden" name="tipo" value=""/);
+    expect(panel).toMatch(/<input type="hidden" name="orden" value="recientes"/);
+  });
+
+  it('labels each capsule above it: Nivel, Tipo, Ordenar por', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const panel = filtersPanel(await res.text());
+    for (const [testId, label] of [
+      ['filters-level', 'Nivel'],
+      ['filters-type', 'Tipo'],
+      ['filters-sort', 'Ordenar por'],
+    ]) {
+      const at = panel.indexOf(`data-testid="${testId}"`);
+      const buttonTag = panel.slice(panel.lastIndexOf('<button', at), panel.indexOf('>', at) + 1);
+      expect(buttonTag).toContain(`aria-label="${label}"`);
+      // The visible label sits right before its capsule, in the same field.
+      const fieldStart = panel.lastIndexOf('data-filters-field', at);
+      expect(panel.slice(fieldStart, at)).toContain(`>${label}</span>`);
+    }
+  });
+
+  it('hands the level list its "Todos los niveles" option and the sort list its three orders', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const props = filtersIslandProps(await res.text());
+    expect(props.allLevelsLabel).toBe('Todos los niveles');
+    expect(props.sortOptions).toEqual([
+      { value: 'recientes', label: 'Más recientes' },
+      { value: 'gustadas', label: 'Más gustadas' },
+      { value: 'vistas', label: 'Más vistas' },
+    ]);
+  });
+
+  it('hydrates the filters right away, so the panel works as soon as it opens', async () => {
+    const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
+    const tag = (await res.text()).match(/<astro-island[^>]*component-url="[^"]*CommunityFiltersIsland"[^>]*>/)?.[0];
+    expect(tag).toMatch(/client="load"/);
   });
 
   it('checks the novistas checkbox when active', async () => {
@@ -341,10 +441,11 @@ describe('GET /[lang]/ingles/actividades — filter bar reflects the current URL
     expect(html).toMatch(/name="novistas"[^>]*checked/);
   });
 
-  it('marks the active type option selected', async () => {
+  it('shows the active type in its capsule and carries it in the panel form', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades?tipo=match', { params: { lang: 'es' } });
-    const html = await res.text();
-    expect(html).toMatch(/<option value="match" selected/);
+    const panel = filtersPanel(await res.text());
+    expect(capsuleText(panel, 'filters-type')).toBe('Une las parejas');
+    expect(panel).toMatch(/<input type="hidden" name="tipo" value="match"/);
   });
 });
 
@@ -355,18 +456,21 @@ describe('GET /[lang]/ingles/actividades — filter bar reflects the current URL
 describe('GET /[lang]/ingles/actividades — tipo filter options (hide "Varios juegos", owner decision 2026-10-20)', () => {
   it('offers Todos, Worksheet, and every quiz template mold — never "Varios juegos"', async () => {
     const res = await render('https://chuyocode.test/es/ingles/actividades', { params: { lang: 'es' } });
-    const html = await res.text();
-    const selectHtml = html.slice(html.indexOf('name="tipo"'), html.indexOf('</select>', html.indexOf('name="tipo"')));
-    expect(selectHtml).toContain('>Todos<');
-    expect(selectHtml).toContain('>Worksheet<');
-    expect(selectHtml).toContain('>Une las parejas<');
-    expect(selectHtml).toContain('>Reordenar<');
-    expect(selectHtml).toContain('>Completar la frase<');
-    expect(selectHtml).toContain('>Ordenar por grupos<');
-    expect(selectHtml).toMatch(/<option value="choose"[^>]*>Elegir la respuesta</);
-    expect(selectHtml).not.toContain('Varios juegos');
-    expect(selectHtml).not.toContain('value="basic"');
-    expect(selectHtml).not.toContain('value="quiz"');
+    const { typeOptions } = filtersIslandProps(await res.text());
+    expect(typeOptions).toEqual([
+      { value: '', label: 'Todos' },
+      { value: 'worksheet', label: 'Worksheet' },
+      { value: 'match', label: 'Une las parejas' },
+      { value: 'reorder', label: 'Reordenar' },
+      { value: 'cloze', label: 'Completar la frase' },
+      { value: 'groupsort', label: 'Ordenar por grupos' },
+      { value: 'choose', label: 'Elegir la respuesta' },
+    ]);
+    const labels = typeOptions.map((opt) => opt.label);
+    const values = typeOptions.map((opt) => opt.value);
+    expect(labels).not.toContain('Varios juegos');
+    expect(values).not.toContain('basic');
+    expect(values).not.toContain('quiz');
   });
 
   it('treats an old generic tipo=quiz as no filter', async () => {
@@ -395,15 +499,17 @@ describe('GET /[lang]/ingles/actividades — tipo filter options (hide "Varios j
     const res = await render('https://chuyocode.test/es/ingles/actividades?tipo=choose', { params: { lang: 'es' } });
     const html = await res.text();
     expect(publishedMock).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'choose' }));
-    expect(html).toMatch(/<option value="choose" selected/);
+    const panel = filtersPanel(html);
+    expect(capsuleText(panel, 'filters-type')).toBe('Elegir la respuesta');
+    expect(panel).toMatch(/<input type="hidden" name="tipo" value="choose"/);
     expect(html).toMatch(/data-testid="filter-chip-tipo"[^>]*>\s*Elegir la respuesta/);
   });
 
   it('names the "Elegir la respuesta" option in English too', async () => {
     const res = await render('https://chuyocode.test/en/ingles/actividades', { params: { lang: 'en' } });
-    const html = await res.text();
-    const selectHtml = html.slice(html.indexOf('name="tipo"'), html.indexOf('</select>', html.indexOf('name="tipo"')));
-    expect(selectHtml).toMatch(/<option value="choose"[^>]*>Choose the answer</);
+    const { typeOptions, allLevelsLabel } = filtersIslandProps(await res.text());
+    expect(typeOptions).toContainEqual({ value: 'choose', label: 'Choose the answer' });
+    expect(allLevelsLabel).toBe('All levels');
   });
 });
 
@@ -452,7 +558,8 @@ describe('GET /[lang]/ingles/actividades — unified search header (community-se
       const count = (html.match(new RegExp(`name="${name}"`, 'g')) ?? []).length;
       expect(count).toBe(1);
     }
-    // `tipo` is now a <select> — one `name="tipo"` on the element itself.
+    // `tipo` too: one `name="tipo"`, the type dropdown's own hidden field —
+    // the dropdown never adds a second named field of its own.
     const tipoCount = (html.match(/name="tipo"/g) ?? []).length;
     expect(tipoCount).toBe(1);
   });

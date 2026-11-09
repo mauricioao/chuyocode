@@ -5,15 +5,17 @@
  * `PageTitle`'s `actions` slot right next to `SearchFilter` (server mode),
  * same visual weight/size as its magnifier (36x36, round, amber).
  *
- * DELIBERATELY NOT a React island: the panel (level/type/sort selects, the
- * "no las he visto" toggle, Aplicar/Limpiar) is a plain `method="get"` form —
- * every field already works with scripting off. The open/close affordance
- * itself is a native `<details>`/`<summary>` (zero JS to toggle, native
- * expanded/collapsed semantics for AT for free), styled with CSS to read as
- * an anchored popover at `lg:` and a bottom sheet below it — no
- * `BottomSheet`/Radix `Popover` needed for a disclosure this simple, so no
- * hydration cost. A tiny enhancement script (outside-click / Escape to
- * close) is pure progressive icing, never required for the form to work.
+ * The panel is a plain `method="get"` form. Its level/type/sort fields are
+ * the Inglés capsule dropdown (`CommunityFiltersIsland`, owner approval
+ * 2026-11-09, maquette `ChuyoCode_others/propuestas/desplegables` B2/B3):
+ * each submits a hidden field with the same name and value the native select
+ * did, so the URLs and the server are unchanged. Those three fields need JS
+ * now (owner accepted); the server render already shows the current values.
+ * The "no las he visto" toggle, Aplicar and Limpiar stay plain HTML. The
+ * open/close affordance itself is a native `<details>`/`<summary>` (zero JS
+ * to toggle, native expanded/collapsed semantics for AT for free), styled
+ * with CSS to read as an anchored popover at `lg:` and a bottom sheet below
+ * it. A tiny enhancement script closes it on an outside click or Escape.
  *
  * "Aplicar" submits this form's own fields plus a preserved `q` (hidden,
  * from `query`) so applying filters never drops an active search. "Limpiar"
@@ -22,12 +24,8 @@
  * JS required either.
  */
 import type { Lang } from '@lib/i18n';
-
-interface SelectOption {
-  value: string;
-  label: string;
-  selected: boolean;
-}
+import type { Level } from '@lib/exerciseTaxonomy';
+import { CommunityFiltersIsland, type FilterOption } from '@components/islands/activities/CommunityFiltersIsland';
 
 interface Props {
   lang: Lang;
@@ -40,11 +38,18 @@ interface Props {
   clearLabel: string;
   clearHref: string;
   levelSelectLabel: string;
-  levelOptions: SelectOption[];
+  /** The current `?nivel=`, `null` for every level. */
+  level: Level | null;
+  /** The level list's none option ("Todos los niveles"). */
+  allLevelsLabel: string;
   typeSelectLabel: string;
-  typeOptions: SelectOption[];
+  /** The current `?tipo=`, `""` for every type. */
+  type: string;
+  typeOptions: FilterOption[];
   sortSelectLabel: string;
-  sortOptions: SelectOption[];
+  /** The current `?orden=`. */
+  sort: string;
+  sortOptions: FilterOption[];
   showNovistas: boolean;
   novistasChecked: boolean;
   novistasLabel: string;
@@ -54,6 +59,7 @@ interface Props {
 }
 
 const {
+  lang,
   action,
   triggerLabel,
   activeCount,
@@ -61,10 +67,13 @@ const {
   clearLabel,
   clearHref,
   levelSelectLabel,
-  levelOptions,
+  level,
+  allLevelsLabel,
   typeSelectLabel,
+  type,
   typeOptions,
   sortSelectLabel,
+  sort,
   sortOptions,
   showNovistas,
   novistasChecked,
@@ -103,32 +112,19 @@ const {
   <form method="get" action={action} class="filters-panel">
     <input type="hidden" name="q" value={query} />
 
-    <label class="filters-field">
-      <span>{levelSelectLabel}</span>
-      <select name="nivel">
-        {levelOptions.map((opt) => (
-          <option value={opt.value} selected={opt.selected}>{opt.label}</option>
-        ))}
-      </select>
-    </label>
-
-    <label class="filters-field">
-      <span>{typeSelectLabel}</span>
-      <select name="tipo">
-        {typeOptions.map((opt) => (
-          <option value={opt.value} selected={opt.selected}>{opt.label}</option>
-        ))}
-      </select>
-    </label>
-
-    <label class="filters-field">
-      <span>{sortSelectLabel}</span>
-      <select name="orden">
-        {sortOptions.map((opt) => (
-          <option value={opt.value} selected={opt.selected}>{opt.label}</option>
-        ))}
-      </select>
-    </label>
+    <CommunityFiltersIsland
+      client:load
+      lang={lang}
+      level={level}
+      type={type}
+      sort={sort}
+      levelLabel={levelSelectLabel}
+      allLevelsLabel={allLevelsLabel}
+      typeLabel={typeSelectLabel}
+      typeOptions={typeOptions}
+      sortLabel={sortSelectLabel}
+      sortOptions={sortOptions}
+    />
 
     {
       showNovistas && (
@@ -202,7 +198,9 @@ const {
   }
 
   /* Anchored, right-aligned popover at `lg:` — the `<details>`'s own native
-     open/close already shows/hides this, no extra CSS needed for that part. */
+     open/close already shows/hides this, no extra CSS needed for that part.
+     The same white floating surface as the dropdown lists (maquette B2):
+     radius 20, the kit's thin ring and its ink-tinted floating shadow. */
   .filters-panel {
     position: absolute;
     top: calc(100% + 8px);
@@ -212,13 +210,12 @@ const {
     width: 17.5rem;
     max-height: 70dvh;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 14px;
     overflow-y: auto;
-    border-radius: 0.75rem;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface-soft);
+    border-radius: 20px;
+    background: var(--popover);
     padding: 1rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--ingles-glass-ring), var(--shadow-floating);
   }
 
   /* Below `lg:`, the same panel becomes a bottom sheet instead of an anchored
@@ -236,45 +233,6 @@ const {
       border-radius: 1rem 1rem 0 0;
       padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
     }
-  }
-
-  .filters-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.875rem;
-    color: var(--muted-foreground);
-  }
-  /* Premium design system (PR 1): the same filled-soft-surface field look as
-     `input.tsx`/`select.tsx` — this panel is a plain Astro form (no React),
-     so the tokens are applied directly rather than through `fieldClasses()`.
-     The chevron is Phosphor's own "CaretDown" bold path, inlined as a
-     background-image data URI (this is a native `<select>`, `appearance:
-     none` strips its own arrow only). */
-  .filters-field select {
-    appearance: none;
-    height: var(--control-h-md, 2.5rem);
-    border-radius: var(--radius-field, 0.75rem);
-    border: 1px solid var(--color-field-border);
-    background-color: var(--color-field);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='%23a1a1aa' d='M216.49,104.49l-80,80a12,12,0,0,1-17,0l-80-80a12,12,0,0,1,17-17L128,159l71.51-71.52a12,12,0,0,1,17,17Z'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 0.6rem center;
-    background-size: 14px;
-    padding: 0.5rem 2.25rem 0.5rem 0.75rem;
-    font-size: 0.875rem;
-    color: var(--foreground);
-    transition:
-      border-color 180ms ease-out,
-      box-shadow 180ms ease-out;
-  }
-  .filters-field select:hover {
-    border-color: var(--color-field-border-hover);
-  }
-  .filters-field select:focus-visible {
-    outline: none;
-    border-color: var(--ring, #facc15);
-    box-shadow: 0 0 0 3px var(--color-field-ring);
   }
 
   .filters-checkbox {
@@ -302,7 +260,7 @@ const {
   }
   .filters-clear {
     font-size: 0.875rem;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--muted-foreground);
     text-decoration: none;
   }
@@ -310,24 +268,60 @@ const {
   .filters-clear:focus-visible {
     color: var(--color-accent-ink, #facc15);
   }
+  /* The kit's button rule (DIRECCION-VISUAL §3.3): a 34px capsule that hugs
+     its label, never stretched (no width). Same yellow fill as before. */
   .filters-apply {
-    border-radius: 0.5rem;
-    background: var(--color-accent, #facc15);
-    padding: 0.5rem 1rem;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    height: 34px;
+    padding: 0 22px;
+    border-radius: 999px;
+    background: var(--primary, #facc15);
     font-size: 0.875rem;
+    line-height: 1.25rem;
     font-weight: 600;
     color: var(--primary-foreground, #000);
+    white-space: nowrap;
     border: none;
     cursor: pointer;
   }
   .filters-apply:hover {
     background: var(--color-accent-hover, #eab308);
   }
+  .filters-apply:focus-visible {
+    outline: 2px solid var(--ring, #facc15);
+    outline-offset: 2px;
+  }
 </style>
 
 <script>
   // Purely additive polish: close the panel on an outside click or Escape.
   // The <details>/<summary> disclosure already works fully without this.
+  //
+  // A dropdown's list (`CapsuleSelect`, Radix) belongs to the panel even
+  // though it is portaled to <body>, and a press that starts OR ends with a
+  // list open belongs to that list, never to the panel:
+  //  - opening: Radix opens on pointerdown and sets `pointer-events: none` on
+  //    <body> while open, so that same press's `click` lands on <html>;
+  //  - choosing an option, or pressing outside to dismiss the list (which
+  //    closes the list only, like the first Escape): by the time that
+  //    `click` fires the list is gone, so its state is read at pointerdown.
+  // Reset on `window`, after every `document` listener has read it, so a
+  // later keyboard click never sees a stale value.
+  const isListOpen = () => document.querySelector('[data-slot="capsule-select-content"]') !== null;
+  let pressStartedOnOpenList = false;
+  document.addEventListener(
+    'pointerdown',
+    () => {
+      pressStartedOnOpenList = isListOpen();
+    },
+    true,
+  );
+  window.addEventListener('click', () => {
+    pressStartedOnOpenList = false;
+  });
+
   function initFiltersPopovers(): void {
     document.querySelectorAll<HTMLDetailsElement>('.filters-popover').forEach((el) => {
       if (el.dataset.chuWired === '1') return;
@@ -336,6 +330,7 @@ const {
       document.addEventListener('click', (e: MouseEvent) => {
         if (!el.open) return;
         if (el.contains(e.target as Node)) return;
+        if (pressStartedOnOpenList || isListOpen()) return;
         el.open = false;
       });
 

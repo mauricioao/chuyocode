@@ -64,10 +64,12 @@
  * shows "Actividades de la comunidad"). ALL FILTERS STILL LIVE IN THE URL,
  * as plain GET forms plus plain links (pagination, chips, "Limpiar
  * filtros") — the whole page still works with scripting off, stays
- * deep-linkable, and survives a back-button press. The actual query
- * building (search escaping, sort columns, the `novistas` exclusion) lives
- * in `getPublishedActivities` (`@lib/activities/activities`) and
- * `discoveryQuery.ts`, never here.
+ * deep-linkable, and survives a back-button press. (Except the panel's
+ * level/type/sort fields: capsule dropdowns that need JS since 2026-11-09,
+ * submitting the same params — `CommunityFiltersPanel.astro`'s header.)
+ * The actual query building (search escaping, sort columns, the
+ * `novistas` exclusion) lives in `getPublishedActivities`
+ * (`@lib/activities/activities`) and `discoveryQuery.ts`, never here.
  *
  * Active filters (nivel/tipo/orden!=default/novistas) are visible without
  * opening the panel: a row of small removable chips under the title bar,
@@ -89,7 +91,7 @@ import CommunityFiltersPanel from '@components/activities/CommunityFiltersPanel.
 import { buttonVariants } from '@components/ui/button';
 import { PlusIcon } from '@phosphor-icons/react/dist/ssr/Plus';
 import { isValidLang, UI_LABELS, type Lang } from '@lib/i18n';
-import { LEVELS, isLevel } from '@lib/exerciseTaxonomy';
+import { isLevel } from '@lib/exerciseTaxonomy';
 import { getPublishedActivities, ACTIVITIES_PAGE_SIZE, type PublishedActivityCard } from '@lib/activities/activities';
 import { isBlockKindFilter, isSortOrder, type SortOrder } from '@lib/activities/discoveryQuery';
 import type { BlockKind } from '@lib/activities/blocks';
@@ -288,28 +290,12 @@ const TYPE_OPTIONS: Array<{ value: BlockKind | ''; label: string }> = [
  * `TYPE_OPTIONS` so it can never drift from what the select itself offers. */
 const typeLabelByValue = new Map(TYPE_OPTIONS.filter((opt) => opt.value).map((opt) => [opt.value, opt.label]));
 
-const levelOptions = [
-  { value: '', label: t.allLevels, selected: activeLevel === null },
-  // The level's full display name already carries its own code (e.g.
-  // "Básico A2" — i18n.ts's own "band + code" scheme), so this never
-  // prefixes the option label with the bare code again.
-  ...LEVELS.map((lvl) => ({
-    value: lvl,
-    label: levelLabels[lvl],
-    selected: activeLevel === lvl,
-  })),
-];
-
-const typeOptions = TYPE_OPTIONS.map((opt) => ({
-  value: opt.value,
-  label: opt.label,
-  selected: activeTipo === (opt.value || null),
-}));
-
-const sortOptions = [
-  { value: 'recientes', label: t.sortRecientes, selected: orden === 'recientes' },
-  { value: 'gustadas', label: t.sortGustadas, selected: orden === 'gustadas' },
-  { value: 'vistas', label: t.sortVistas, selected: orden === 'vistas' },
+// The level list itself (`LevelSelect`) names every level by its full
+// display name ("Básico A2"), after the none option ("Todos los niveles").
+const sortOptions: Array<{ value: SortOrder; label: string }> = [
+  { value: 'recientes', label: t.sortRecientes },
+  { value: 'gustadas', label: t.sortGustadas },
+  { value: 'vistas', label: t.sortVistas },
 ];
 
 /** One removable chip per active filter, in a fixed order. */
@@ -420,10 +406,13 @@ const createActivityLabel = UI_LABELS[lang].activities.start.pageTitle;
         clearLabel={t.panelClear}
         clearHref={panelClearHref}
         levelSelectLabel={t.levelLabel}
-        levelOptions={levelOptions}
+        level={activeLevel}
+        allLevelsLabel={t.allLevels}
         typeSelectLabel={t.typeLabel}
-        typeOptions={typeOptions}
+        type={activeTipo ?? ''}
+        typeOptions={TYPE_OPTIONS}
         sortSelectLabel={t.sortLabel}
+        sort={orden}
         sortOptions={sortOptions}
         showNovistas={viewerId !== null}
         novistasChecked={novistas}
