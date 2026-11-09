@@ -31,6 +31,25 @@ describe('UiReferenceIsland — task progress', () => {
   });
 });
 
+describe('UiReferenceIsland — capsule dropdowns (Inglés pattern, owner approval 2026-11-09)', () => {
+  it('shows the generic capsule select, its disabled state and the level select, inside the Inglés scope', () => {
+    render(<UiReferenceIsland lang="es" />);
+    const section = screen.getByTestId('ui-ref-capsule-selects');
+    expect(section.getAttribute('data-theme')).toBe('ingles');
+
+    const generic = screen.getByTestId('ui-ref-capsule-select-default');
+    expect(generic.getAttribute('role')).toBe('combobox');
+    expect(generic.textContent).toBe('Más recientes');
+    expect((screen.getByTestId('ui-ref-capsule-select-disabled') as HTMLButtonElement).disabled).toBe(true);
+
+    const level = screen.getByTestId('ui-ref-level-select');
+    expect(level.textContent).toBe('Intermedio B1');
+    expect(level.querySelector('[data-slot="level-bars"]')).not.toBeNull();
+    expect(screen.getByTestId('ui-ref-level-select-none').textContent).toBe('Sin nivel');
+    for (const el of [generic, level]) expect(section.contains(el)).toBe(true);
+  });
+});
+
 describe('UiReferenceIsland — images', () => {
   it('fades the loaded swatch in, and swaps the broken swatch for a neutral placeholder', () => {
     render(<UiReferenceIsland lang="es" />);

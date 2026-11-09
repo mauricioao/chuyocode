@@ -11,6 +11,13 @@ import { cn } from '@/lib/utils';
  * reader support for free. `appearance-none` strips only the browser's own
  * chevron/chrome; a Phosphor `CaretDown` is drawn on top so it matches
  * `input.tsx`/`textarea.tsx` pixel-for-pixel.
+ *
+ * 2026-11-09 (owner decision, maquette `propuestas/desplegables`): the
+ * Inglés product's capsule dropdowns no longer use this — they use
+ * `CapsuleSelect`/`LevelSelect` (a Radix listbox; the existing `BottomSheet`
+ * on phones), and the owner accepted that this replaces the native phone
+ * picker for those controls. This native select stays for legacy and brand
+ * uses.
  */
 interface SelectProps extends React.ComponentProps<'select'> {
   fieldSize?: FieldSize;

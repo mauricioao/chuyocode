@@ -1567,6 +1567,237 @@ h3 {
     color-mix(in srgb, var(--color-pop-red-deep) 85%, black);
 }
 
+/* --- Inglés capsule dropdown (owner approval 2026-11-09) -----------------
+ * `CapsuleSelect.tsx` / `LevelSelect.tsx`. Spec: the maquette
+ * `ChuyoCode_others/propuestas/desplegables`, section E — every value below
+ * is a token or a size from that table, no new colours. Keyed off the
+ * components' own `data-slot`s, same posture as the button kit above.
+ *
+ * TRIGGER: a white 34px capsule hugging its text (never stretched — no width
+ * rule), inset hairline + L1, lifting to L2 on hover/open; the chevron turns
+ * 180° while open; keyboard focus is a 2px `--ring` outline (4.2:1 on the
+ * title bar). */
+[data-theme='ingles'] [data-slot='capsule-select-trigger'] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  height: 34px;
+  padding: 0 11px 0 12px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--ingles-inset-hairline), var(--shadow-elevation-1);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: box-shadow 120ms ease-out;
+}
+[data-theme='ingles'] [data-slot='capsule-select-trigger']:hover,
+[data-theme='ingles'] [data-slot='capsule-select-trigger'][data-state='open'] {
+  box-shadow: var(--ingles-inset-hairline), var(--shadow-elevation-2);
+}
+[data-theme='ingles'] [data-slot='capsule-select-trigger']:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+[data-theme='ingles'] [data-slot='capsule-select-trigger']:disabled {
+  opacity: 0.5;
+  box-shadow: var(--ingles-inset-hairline);
+  cursor: not-allowed;
+}
+/* A 44px touch target on touch screens, invisible: 34px + 5px above/below. */
+@media (pointer: coarse) {
+  [data-theme='ingles'] [data-slot='capsule-select-trigger'][data-variant='capsule']::after {
+    content: '';
+    position: absolute;
+    inset: -5px 0;
+  }
+}
+[data-theme='ingles'] [data-slot='capsule-select-value'] {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+[data-theme='ingles'] [data-slot='capsule-select-text'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+[data-theme='ingles'] [data-slot='capsule-select-text'][data-placeholder] {
+  color: var(--muted-foreground);
+}
+[data-theme='ingles'] [data-slot='capsule-select-caret'] {
+  flex: none;
+  color: var(--muted-foreground);
+  transition: transform 120ms ease-out;
+}
+[data-theme='ingles'] [data-slot='capsule-select-trigger'][data-state='open'] [data-slot='capsule-select-caret'] {
+  transform: rotate(180deg);
+}
+[data-theme='ingles'] [data-slot='capsule-select-icon'] {
+  display: inline-flex;
+  flex: none;
+}
+
+/* ROW variant: the same control as a full-width menu row ("Nivel ·
+ * Intermedio B1"), for the editor's phone "⋯" menu. */
+[data-theme='ingles'] [data-slot='capsule-select-trigger'][data-variant='row'] {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+}
+[data-theme='ingles'] [data-slot='capsule-select-trigger'][data-variant='row']:hover,
+[data-theme='ingles'] [data-slot='capsule-select-trigger'][data-variant='row'][data-state='open'] {
+  background: var(--muted);
+  box-shadow: none;
+}
+[data-theme='ingles'] [data-slot='capsule-select-row-label'] {
+  margin-right: auto;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+/* PANEL: opaque white, never glass (text on glass fell to 3.4:1 in the
+ * maquette's section C). Radius 16 with 4px padding, so rows get radius 12;
+ * the kit's floating shadow. The panel carries `data-theme` itself (see
+ * `CapsuleSelect.tsx`), so this one rule matches it on the element. */
+[data-theme='ingles'][data-slot='capsule-select-content'] {
+  z-index: 50;
+  min-width: var(--radix-select-trigger-width);
+  max-height: var(--radix-select-content-available-height);
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--ingles-glass-ring), var(--shadow-floating);
+}
+[data-theme='ingles'][data-slot='capsule-select-content'][data-state='open'] {
+  animation: capsule-select-in 120ms ease-out;
+}
+/* Appears in 120ms (opacity + 4px downward), no bounce; none at all under
+ * "reduce motion". */
+@keyframes capsule-select-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-theme='ingles'][data-slot='capsule-select-content'][data-state='open'] {
+    animation: none;
+  }
+  [data-theme='ingles'] [data-slot='capsule-select-trigger'],
+  [data-theme='ingles'] [data-slot='capsule-select-caret'] {
+    transition: none;
+  }
+}
+[data-theme='ingles'] [data-slot='capsule-select-viewport'] {
+  padding: 4px;
+}
+
+/* ROWS: 44px, 15/20. Hover is soft grey; the keyboard highlight is the same
+ * grey plus a 2px inner ring; the chosen row is the sky tint with the kit's
+ * sky glow, weight 600 and a ✓ (never colour alone); a disabled row's text is
+ * ink at 38%. Radix highlights (and focuses) a row on hover AND on the
+ * arrows, and Chrome calls both `:focus-visible` — so the desktop list's own
+ * `data-input` (see `CapsuleSelect.tsx`) decides the ring. The phone sheet's
+ * rows are plain buttons, where `:focus-visible` is reliable. */
+[data-theme='ingles'] [data-slot='capsule-select-item'] {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 400;
+  text-align: left;
+  white-space: nowrap;
+  outline: none;
+  cursor: pointer;
+  user-select: none;
+}
+[data-theme='ingles'] [data-slot='capsule-select-item'][data-highlighted],
+[data-theme='ingles'] [data-slot='capsule-select-sheet'] [data-slot='capsule-select-item']:focus-visible {
+  background: var(--muted);
+}
+[data-theme='ingles'][data-input='keyboard'] [data-slot='capsule-select-item'][data-highlighted],
+[data-theme='ingles'] [data-slot='capsule-select-sheet'] [data-slot='capsule-select-item']:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+[data-theme='ingles'] [data-slot='capsule-select-item'][data-state='checked'] {
+  background: var(--well-active-bg);
+  font-weight: 600;
+  box-shadow: var(--shadow-glow-sky);
+}
+[data-theme='ingles'][data-input='keyboard'] [data-slot='capsule-select-item'][data-state='checked'][data-highlighted],
+[data-theme='ingles'] [data-slot='capsule-select-sheet'] [data-slot='capsule-select-item'][data-state='checked']:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ring), var(--shadow-glow-sky);
+}
+[data-theme='ingles'] [data-slot='capsule-select-item'][data-disabled],
+[data-theme='ingles'] [data-slot='capsule-select-item']:disabled {
+  color: color-mix(in srgb, var(--foreground) 38%, transparent);
+  cursor: default;
+}
+[data-theme='ingles'] [data-slot='capsule-select-item-text'] {
+  margin-right: 18px;
+}
+[data-theme='ingles'] [data-slot='capsule-select-check'] {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  color: var(--color-pop-sky-deep);
+}
+[data-theme='ingles'] [data-slot='capsule-select-check'] svg {
+  width: 100%;
+  height: 100%;
+}
+/* Thin line between groups: 1px `--muted`, 4px above/below, 12px in. */
+[data-theme='ingles'] [data-slot='capsule-select-separator'] {
+  flex: none;
+  height: 1px;
+  margin: 4px 12px;
+  background: var(--muted);
+}
+
+/* PHONE: the same rows inside the existing `BottomSheet` — 48px tall, 17/22
+ * text, an 18px ✓ and 20 × 19 bars. */
+[data-theme='ingles'] [data-slot='capsule-select-sheet'] {
+  display: flex;
+  flex-direction: column;
+}
+[data-theme='ingles'] [data-slot='capsule-select-sheet'] [data-slot='capsule-select-item'] {
+  min-height: 48px;
+  font-size: 17px;
+  line-height: 22px;
+}
+[data-theme='ingles'] [data-slot='capsule-select-sheet'] [data-slot='capsule-select-check'] {
+  width: 18px;
+  height: 18px;
+}
+[data-theme='ingles'] [data-slot='capsule-select-sheet'] [data-slot='level-bars'] {
+  width: 20px;
+  height: 19px;
+}
+
 /* --- Desk calendar widget cells ("desktop" redesign PART 3) --------------
  * Plain selectors, not Tailwind utilities: `@lib/ui/deskWidgets.ts` injects
  * the day grid's `<td>`/`<span>` cells as a raw HTML string at runtime,

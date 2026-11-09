@@ -1,7 +1,16 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act, within } from '@testing-library/react';
 import ActivityEditorIsland from './ActivityEditorIsland';
+
+// The level `LevelSelect` (Radix Select) calls these while opening — jsdom
+// implements none of them.
+{
+  const proto = Element.prototype as unknown as Record<string, unknown>;
+  proto.scrollIntoView ??= () => {};
+  proto.hasPointerCapture ??= () => false;
+  proto.releasePointerCapture ??= () => {};
+}
 import type { Block, WorksheetBlock } from '@/lib/activities/blocks';
 import { TEMPLATE_TOOLBAR_DOCK_MARGIN } from './TemplateEditorKit';
 import { DOCK_MARGIN } from '@/lib/activities/toolbarPosition';
@@ -646,11 +655,29 @@ describe('ActivityEditorIsland — mobile title bar "⋯" menu (bug fix, owner r
     expect(actionsSlot?.children.length).toBe(0);
   });
 
-  it('on a phone, the level select inside the menu still edits the same document', () => {
+  // Dropdown pattern (owner approval 2026-11-09, maquette `desplegables` D):
+  // the menu's "Nivel" row opens the levels in the BottomSheet; choosing one
+  // edits the same document, which is what gets saved.
+  it('on a phone, the level row inside the menu opens the bottom sheet and the chosen level is what gets saved', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
     stubMobileViewport();
     renderEditor({ initialLevel: 'A1' });
-    fireEvent.change(screen.getByTestId('activity-level-select'), { target: { value: 'B1' } });
-    expect((screen.getByTestId('activity-level-select') as HTMLSelectElement).value).toBe('B1');
+    const row = screen.getByTestId('activity-level-select');
+    expect(row.textContent).toContain('Nivel');
+    expect(row.textContent).toContain('Básico A1');
+
+    fireEvent.click(row);
+    const sheet = screen.getByTestId('activity-level-select-sheet');
+    fireEvent.click(within(sheet).getByText('Intermedio B1'));
+    await waitFor(() => expect(screen.queryByTestId('activity-level-select-sheet')).toBeNull());
+    expect(screen.getByTestId('activity-level-select').textContent).toContain('Intermedio B1');
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body).level).toBe('B1');
   });
 
   it('on a phone, "Enviar a revisión" inside the menu still opens the submit dialog', () => {
@@ -1061,11 +1088,43 @@ describe('ActivityEditorIsland — dirty tracking and save', () => {
 });
 
 describe('ActivityEditorIsland — level select', () => {
-  it('changing the level marks unsaved and updates the value', () => {
+  // Dropdown pattern (owner approval 2026-11-09, maquette `desplegables`
+  // A3/A4): a capsule `LevelSelect` in the title bar, same value semantics.
+  it('changing the level marks unsaved, updates the capsule, and the chosen level is what gets saved', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
     renderEditor({ initialBlocks: [WORKSHEET_BLOCK] });
-    fireEvent.change(screen.getByTestId('activity-level-select'), { target: { value: 'B1' } });
-    expect((screen.getByTestId('activity-level-select') as HTMLSelectElement).value).toBe('B1');
+    const trigger = screen.getByTestId('activity-level-select');
+    expect(trigger.getAttribute('role')).toBe('combobox');
+    expect(trigger.textContent).toBe('Sin nivel');
+
+    fireEvent.click(trigger);
+    fireEvent.click(within(await screen.findByRole('listbox')).getByText('Intermedio B1'));
+    expect(screen.getByTestId('activity-level-select').textContent).toBe('Intermedio B1');
     expect(screen.getByTestId('save-status').getAttribute('data-status')).toBe('unsaved');
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body).level).toBe('B1');
+  });
+
+  it('choosing "Sin nivel" clears the level (saved as null)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderEditor({ initialBlocks: [WORKSHEET_BLOCK], initialLevel: 'C1' });
+    expect(screen.getByTestId('activity-level-select').textContent).toBe('Avanzado C1');
+
+    fireEvent.click(screen.getByTestId('activity-level-select'));
+    fireEvent.click(within(await screen.findByRole('listbox')).getByText('Sin nivel'));
+    expect(screen.getByTestId('activity-level-select').textContent).toBe('Sin nivel');
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 's', ctrlKey: true });
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body).level).toBeNull();
   });
 });
 

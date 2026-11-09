@@ -29,8 +29,9 @@ import DeskClockWidget from '@components/ingles/DeskClockWidget.astro';
 import DeskCalendarWidget from '@components/ingles/DeskCalendarWidget.astro';
 import DeskWeatherWidget from '@components/ingles/DeskWeatherWidget.astro';
 import DeskPlayerWidget from '@components/ingles/DeskPlayerWidget';
-import { LEVELS, type Level } from '@lib/exerciseTaxonomy';
+import { LEVELS } from '@lib/exerciseTaxonomy';
 import { levelBand, type Lang } from '@lib/i18n';
+import { DOCK_BAR_HEIGHTS, levelTier, type LevelTier } from '@lib/ui/levelBars';
 import type { DeskScenePlayerLabels, DeskSceneLabels } from '@lib/ingles/deskSceneData';
 
 interface Props {
@@ -76,16 +77,15 @@ const {
 // CEFR band -> the dock tile's filled-bar colour (pop tokens, part 2) and how
 // many of the 6 bars light up — the level's own position in the ascending
 // `LEVELS` list (A1 -> 1 bar … C2 -> 6 bars).
-const BAND_FILL_CLASS: Record<'A' | 'B' | 'C', string> = {
+// The bar heights are shared with the level dropdown's miniature icon
+// (`@lib/ui/levelBars`), so the two can never drift apart.
+const BAND_FILL_CLASS: Record<LevelTier, string> = {
   A: 'bg-pop-green',
   B: 'bg-pop-sky',
   C: 'bg-pop-violet',
 };
-const BAR_HEIGHTS = [7, 11, 15, 19, 23, 27] as const;
-
-function bandOf(level: Level): 'A' | 'B' | 'C' {
-  return level[0] as 'A' | 'B' | 'C';
-}
+const BAR_HEIGHTS = DOCK_BAR_HEIGHTS;
+const bandOf = levelTier;
 ---
 
 <section

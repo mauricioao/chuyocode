@@ -22,6 +22,9 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TaskProgress } from '@/components/ui/task-progress';
+import { CapsuleSelect, type CapsuleSelectGroup } from '@/components/ui/CapsuleSelect';
+import { LevelSelect } from '@/components/ui/LevelSelect';
+import type { Level } from '@/lib/exerciseTaxonomy';
 
 const COPY = {
   es: {
@@ -65,6 +68,19 @@ const COPY = {
     images: 'Imágenes (carga y error)',
     imageLoaded: 'Con fundido al cargar',
     imageBroken: 'Imagen rota (placeholder neutral)',
+    // Dropdown pattern of the Inglés product (owner approval 2026-11-09).
+    capsuleSelects: 'Desplegables cápsula (Inglés)',
+    capsuleSelectsHint:
+      'Pasa el mouse, enfoca con Tab o abre cada uno para ver sus estados. En el celular, las opciones abren en una hoja inferior.',
+    sortLabel: 'Ordenar por',
+    sortRecent: 'Más recientes',
+    sortLiked: 'Más gustadas',
+    sortViewed: 'Más vistas',
+    sortShared: 'Más compartidas',
+    levelVariant: 'Variante de nivel',
+    levelNoneVariant: 'Variante de nivel, sin nivel',
+    levelLabel: 'Nivel',
+    levelNone: 'Sin nivel',
   },
   en: {
     inputs: 'Text fields',
@@ -106,6 +122,18 @@ const COPY = {
     images: 'Images (loading and error)',
     imageLoaded: 'With a fade-in on load',
     imageBroken: 'Broken image (neutral placeholder)',
+    capsuleSelects: 'Capsule dropdowns (Inglés)',
+    capsuleSelectsHint:
+      'Hover, Tab into or open each one to see its states. On a phone, the options open in a bottom sheet.',
+    sortLabel: 'Sort by',
+    sortRecent: 'Most recent',
+    sortLiked: 'Most liked',
+    sortViewed: 'Most viewed',
+    sortShared: 'Most shared',
+    levelVariant: 'Level variant',
+    levelNoneVariant: 'Level variant, no level',
+    levelLabel: 'Level',
+    levelNone: 'No level',
   },
 } as const;
 
@@ -158,6 +186,20 @@ export default function UiReferenceIsland({ lang }: UiReferenceIslandProps) {
   const t = lang === 'en' ? COPY.en : COPY.es;
   const [checked, setChecked] = useState(false);
   const fieldId = useId();
+  const [sort, setSort] = useState('recent');
+  const [level, setLevel] = useState<Level | null>('B1');
+  const [noLevel, setNoLevel] = useState<Level | null>(null);
+  // "Más compartidas" is disabled on purpose: the kit shows a disabled row.
+  const sortGroups: CapsuleSelectGroup[] = [
+    {
+      options: [
+        { value: 'recent', label: t.sortRecent },
+        { value: 'liked', label: t.sortLiked },
+        { value: 'viewed', label: t.sortViewed },
+        { value: 'shared', label: t.sortShared, disabled: true },
+      ],
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-10" data-testid="ui-reference">
@@ -194,6 +236,67 @@ export default function UiReferenceIsland({ lang }: UiReferenceIslandProps) {
             <option value="a">Opción A</option>
           </Select>
         </Swatch>
+      </Section>
+
+      {/* The Inglés dropdown pattern (owner approval 2026-11-09, maquette
+          `propuestas/desplegables`): this page is brand-themed, so the
+          swatches sit in their own `data-theme="ingles"` surface — the open
+          panel carries that scope itself (see `CapsuleSelect.tsx`).
+          `self-start`: a capsule hugs its text, never stretched by the
+          swatch's own flex column. */}
+      <Section title={t.capsuleSelects}>
+        <div
+          data-theme="ingles"
+          data-testid="ui-ref-capsule-selects"
+          className="flex w-full flex-col gap-4 rounded-2xl bg-background p-6 text-foreground"
+        >
+          <p className="text-sm text-muted-foreground">{t.capsuleSelectsHint}</p>
+          <div className="flex flex-wrap items-start gap-4">
+            <Swatch label={t.default}>
+              <CapsuleSelect
+                label={t.sortLabel}
+                groups={sortGroups}
+                value={sort}
+                onValueChange={setSort}
+                testId="ui-ref-capsule-select-default"
+                className="self-start"
+              />
+            </Swatch>
+            <Swatch label={t.disabled}>
+              <CapsuleSelect
+                label={t.sortLabel}
+                groups={sortGroups}
+                value="recent"
+                onValueChange={() => {}}
+                disabled
+                testId="ui-ref-capsule-select-disabled"
+                className="self-start"
+              />
+            </Swatch>
+            <Swatch label={t.levelVariant}>
+              <LevelSelect
+                lang={lang}
+                label={t.levelLabel}
+                noneLabel={t.levelNone}
+                value={level}
+                onValueChange={setLevel}
+                testId="ui-ref-level-select"
+                className="self-start"
+              />
+            </Swatch>
+            <Swatch label={t.levelNoneVariant}>
+              <LevelSelect
+                lang={lang}
+                label={t.levelLabel}
+                noneLabel={t.levelNone}
+                value={noLevel}
+                onValueChange={setNoLevel}
+                testId="ui-ref-level-select-none"
+                className="self-start"
+              />
+            </Swatch>
+          </div>
+        </div>
       </Section>
 
       <Section title={t.fieldWrapper}>

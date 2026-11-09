@@ -44,7 +44,7 @@ import { toast } from 'sonner';
 import { PresentationIcon } from '@phosphor-icons/react/dist/ssr/Presentation';
 import { DotsThreeIcon } from '@phosphor-icons/react/dist/ssr/DotsThree';
 import { UI_LABELS, type Lang } from '@/lib/i18n';
-import { LEVELS, isLevel, type Level } from '@/lib/exerciseTaxonomy';
+import { isLevel, type Level } from '@/lib/exerciseTaxonomy';
 import type { Block, IncompleteBlockInfo, WorksheetBlock } from '@/lib/activities/blocks';
 import { hasContent } from '@/lib/activities/draftContent';
 import { imagePreviewUrl, audioPreviewUrl } from '@/lib/activities/paths';
@@ -63,7 +63,7 @@ import {
 } from '@/lib/activities/history';
 import { createAutosaveScheduler, type AutosaveScheduler, type AutosaveStatus } from '@/lib/activities/autosave';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
+import { LevelSelect } from '@/components/ui/LevelSelect';
 import ScrollToTop from '@/components/islands/ScrollToTop';
 import BlockTypePicker from './BlockTypePicker';
 import WorksheetUploader, { type UploadedImage } from './WorksheetUploader';
@@ -1054,10 +1054,14 @@ export default function ActivityEditorIsland({
   // block in sequence, so it keeps this unchanged.
   const previewScrollRef = useRef<HTMLDivElement>(null);
 
-  // The level select, same controlled markup/testid as always — portaled
-  // into the title bar's own far-right ACTIONS slot as of the T2 titlebar
-  // polish (it used to render inline in the title group, right after the
-  // title input; see `desktopActions`'s own header for why it moved out).
+  // The level select — portaled into the title bar's own far-right ACTIONS
+  // slot as of the T2 titlebar polish (it used to render inline in the title
+  // group, right after the title input; see `desktopActions`'s own header
+  // for why it moved out). Dropdown pattern (owner approval 2026-11-09,
+  // maquette `propuestas/desplegables` A3/A4): a capsule `LevelSelect` with
+  // the dock's level bars, its panel docked to the capsule's right edge
+  // (`align="end"`, the capsule sits near the window's edge). Same testid and
+  // value semantics as the native select it replaces: `changeLevel` below.
   // See `isDesktop`/`hydrated`'s own header above for why this (and the two
   // variables below) is a real structural branch, not a CSS media query.
   //
@@ -1070,23 +1074,16 @@ export default function ActivityEditorIsland({
   // `DESK_WINDOW_ACTIONS_ID`), with nothing at all competing for the
   // title's own row any more.
   const desktopLevelAndStatus = (
-    <label className="flex shrink-0 items-center gap-1 text-sm">
-      <span className="sr-only">{t.levelLabel}</span>
-      <Select
-        data-testid="activity-level-select"
-        aria-label={t.levelLabel}
-        fieldSize="sm"
-        value={level ?? ''}
-        onChange={(e) => changeLevel(e.target.value)}
-      >
-        <option value="">{t.levelNone}</option>
-        {LEVELS.map((lvl) => (
-          <option key={lvl} value={lvl}>
-            {levelLabels[lvl]}
-          </option>
-        ))}
-      </Select>
-    </label>
+    <LevelSelect
+      lang={lang}
+      label={t.levelLabel}
+      noneLabel={t.levelNone}
+      value={level}
+      onValueChange={(next) => changeLevel(next ?? '')}
+      align="end"
+      testId="activity-level-select"
+      className="shrink-0"
+    />
   );
 
   /**
@@ -1367,23 +1364,18 @@ export default function ActivityEditorIsland({
         // open at the same time as this menu.
         className="hidden absolute right-0 top-full z-30 mt-2 w-56 max-w-[calc(100vw-2rem)] flex-col items-stretch gap-2 rounded-lg border border-border bg-background p-2 shadow-elevation-2 peer-checked:flex"
       >
-        <label className="flex items-center justify-between gap-2 text-sm">
-          <span className="text-muted-foreground">{t.levelLabel}</span>
-          <Select
-            data-testid="activity-level-select"
-            aria-label={t.levelLabel}
-            fieldSize="sm"
-            value={level ?? ''}
-            onChange={(e) => changeLevel(e.target.value)}
-          >
-            <option value="">{t.levelNone}</option>
-            {LEVELS.map((lvl) => (
-              <option key={lvl} value={lvl}>
-                {levelLabels[lvl]}
-              </option>
-            ))}
-          </Select>
-        </label>
+        {/* Dropdown pattern (owner approval 2026-11-09, maquette
+            `desplegables` D): the "Nivel · Intermedio B1" row opens the
+            levels in the BottomSheet — `LevelSelect`'s own phone path. */}
+        <LevelSelect
+          lang={lang}
+          label={t.levelLabel}
+          noneLabel={t.levelNone}
+          value={level}
+          onValueChange={(next) => changeLevel(next ?? '')}
+          variant="row"
+          testId="activity-level-select"
+        />
         <div className="flex flex-wrap items-center gap-2" data-testid="activity-status-badge" data-status={status}>
           <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
             {t[statusPillKey]}
